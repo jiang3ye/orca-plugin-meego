@@ -1,0 +1,104 @@
+{
+  "manifestVersion": 2,
+  "id": "meego",
+  "name": "Meego",
+  "version": "0.1.0-dev.1",
+  "description": "开发预览：连接飞书项目账号，维护工作项、角色与流程，关联工作区并交给 Agent；需配套 Orca 宿主。",
+  "author": {
+    "name": "jsy"
+  },
+  "license": "MIT",
+  "engines": {
+    "orca": ">=1.4.255"
+  },
+  "execution": "trusted-worker",
+  "pluginApi": 1,
+  "main": "src/worker.ts",
+  "contributes": {
+    "panels": [
+      {
+        "id": "meego",
+        "title": "Meego",
+        "icon": "layers",
+        "entry": "src/panel.tsx",
+        "ui": "components"
+      },
+      {
+        "id": "connection",
+        "title": "飞书项目（Meego）",
+        "icon": "plug",
+        "entry": "src/settings.tsx",
+        "ui": "components",
+        "location": "settings"
+      }
+    ],
+    "commands": [
+      {
+        "id": "meego.refresh",
+        "title": "Meego: 刷新工作区关联"
+      },
+      {
+        "id": "meego.sendToAgent",
+        "title": "Meego: 把关联工作项交给 Agent",
+        "when": "workspace"
+      }
+    ],
+    "settings": [
+      {
+        "key": "base_url",
+        "title": "API 地址",
+        "description": "飞书项目（国内）为 https://project.feishu.cn，国际版 Meegle 为 https://project.larksuite.com。私有部署可在高级连接中使用自己的 HTTPS 地址。",
+        "type": "string",
+        "default": "https://project.feishu.cn"
+      },
+      {
+        "key": "project_key",
+        "title": "高级连接 · Project Key",
+        "description": "企业 OpenAPI 连接使用。个人授权后可直接按名称选择空间。",
+        "type": "string",
+        "default": ""
+      },
+      {
+        "key": "user_key",
+        "title": "高级连接 · User Key",
+        "description": "企业 OpenAPI 连接使用。个人授权会自动识别当前账号。",
+        "type": "string",
+        "default": ""
+      },
+      {
+        "key": "web_url_template",
+        "title": "高级连接 · 工作项链接模板",
+        "description": "浏览器打开工作项用的模板，可用占位符 {project_key} {work_item_type_key} {work_item_id}。租户使用自定义域名时，请复制一条真实工作项的浏览器地址来修改。",
+        "type": "string",
+        "default": "https://project.feishu.cn/work_item/detail/{project_key}/{work_item_type_key}/{work_item_id}"
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "workspace:read"
+    },
+    {
+      "kind": "workspace:write"
+    },
+    {
+      "kind": "agent:read"
+    },
+    {
+      "kind": "agent:launch"
+    },
+    {
+      "kind": "terminal:send"
+    },
+    {
+      "kind": "storage:own"
+    },
+    {
+      "kind": "secrets:own"
+    },
+    {
+      "kind": "settings:own"
+    }
+  ],
+  "repository": "https://github.com/jiang3ye/orca-plugin-meego"
+}

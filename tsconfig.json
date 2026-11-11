@@ -1,0 +1,7 @@
+{
+  "extends": "./.orca/types/tsconfig.json",
+  "compilerOptions": {
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src", "types"]
+}

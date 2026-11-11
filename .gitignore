@@ -1,0 +1,5 @@
+node_modules/
+.orca/
+.DS_Store
+artifacts/
+.zcode/

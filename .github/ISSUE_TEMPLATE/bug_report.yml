@@ -1,0 +1,22 @@
+name: Bug report
+description: Report a reproducible Meego integration problem
+body:
+  - type: markdown
+    attributes:
+      value: 'This development preview requires the companion host in docs/releasing.md. Omit tokens, passwords, real work-item content, account IDs and private space URLs.'
+  - type: input
+    id: versions
+    attributes:
+      label: Orca version, companion build and plugin version
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps, expected behavior and actual result
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted logs or screenshots

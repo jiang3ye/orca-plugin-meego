@@ -1,0 +1,27 @@
+{
+  "name": "orca-plugin-meego",
+  "version": "0.1.0-dev.1",
+  "private": true,
+  "description": "Meego integration for Orca, with Feishu account authorization and workspace handoff.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "sdk": "orca plugin types . --json",
+    "validate": "orca plugin validate . --json",
+    "test": "orca plugin test . --json",
+    "check:panels": "orca plugin check . --json",
+    "typecheck": "tsc -p . --noEmit",
+    "check:source": "node scripts/release-source.mjs --check",
+    "check": "npm run sdk && npm run validate && npm run typecheck && npm test && npm run check:panels && npm run check:source",
+    "release:prepare": "npm run check && node scripts/release-source.mjs --export"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jiang3ye/orca-plugin-meego.git"
+  }
+}
