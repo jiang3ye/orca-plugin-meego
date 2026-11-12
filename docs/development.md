@@ -2,9 +2,9 @@
 
 ## Required host
 
-This is an experimental companion-host integration. The checked public Orca 1.4.256 and public main do not include all required APIs. A numerically compatible version is insufficient.
+This is an independent community integration, not an official Orca or Feishu Project / Meegle product. The checked public Orca v1.4.257 does not include all required APIs; its [strict panel schema](https://github.com/stablyai/orca/blob/v1.4.257/src/shared/plugins/contributions/plugin-panel-contribution.ts) rejects the `location` field used here. A numerically compatible version is insufficient.
 
-The companion platform features originate at host commit `9df199ef`. The CI SDK uses a descendant containing the generated SDK/runtime synchronization fix. Its exact host commit, CLI version and ZIP SHA256 are pinned in [`.github/orca-sdk.json`](../.github/orca-sdk.json); that file is the source of truth, not the feature-baseline short hash. Use the pinned build's CLI throughout type generation, tests and checks. The manifest engine floor describes platform grammar, not support in public Orca releases.
+Default CI builds the real Orca CLI from the exact `jiang3ye/orca` source commit recorded in [`.github/orca-sdk.json`](../.github/orca-sdk.json). Its `repository` and full `commit` are the source of truth; do not duplicate a moving branch or a short hash in setup instructions. Generated declarations and runtime resources are checked together before building. The manifest engine floor describes platform grammar, not support in public Orca releases.
 
 The required platform surface includes canonical workspace IDs, scoped `agents.available`, plugin-scoped `settings.open`, settings-only component panels, background workspace creation and readiness-aware Agent delivery. See [architecture](architecture.md) for their boundaries and [releasing](releasing.md) for compatibility checks before packaging.
 
@@ -47,11 +47,20 @@ The locally verified baseline is 185 passing behavior tests and 11 check scenari
 
 Every push and pull request is configured to run source inventory checks on Linux, macOS and Windows, plus the complete `npm run check` on a macOS 15 ARM64 runner. The SDK job generates types, validates the manifest, typechecks, runs the offline behavior tests and all panel scenarios, and checks the source inventory. Source-only success cannot stand in for this job.
 
-Default CI downloads the private internal companion SDK prerelease named `ci-host-<commit12>`. The pin file binds its exact host commit, ZIP SHA256 and CLI version. CI must verify those values and use the CLI bundled in that same artifact; it must not select `latest`, substitute a public build with a similar version, or silently fall back to source-only checks when artifact access fails. The private asset is an SDK dependency, not a plugin `v*` release or a public Orca release.
+Default CI checks out the pinned host source and builds its official CLI. It does not download a private full desktop ZIP. In that host checkout, the canonical checks and build are:
 
-Generated authoring declarations and runtime resources must come from the same host build. Fix SDK generation in the companion host before packaging an updated pin; do not mask drift with plugin-local Orca type declarations or mocks that widen the public API.
+```sh
+pnpm install --frozen-lockfile
+pnpm generate:plugin-declarative-typings --check
+pnpm generate:plugin-declarative-runtime --check
+pnpm build:cli
+```
 
-Plugin `v*` tags and a manual public-release override additionally require a compatible, published official Orca release. That gate is separate from default companion-SDK CI and must not fall back to the private artifact. There is currently no verified public release satisfying it. See the [release guide](releasing.md#github-检查) for the publication boundary.
+Before using the result, verify that `out/package.json.commit` exactly equals the pin's full `commit`. Use that built CLI for the plugin's complete `npm run check`. An inaccessible commit, stale generated output or identity mismatch must fail; it must not be replaced with a version-nearby CLI, a hand-written SDK or source-only checks.
+
+Generated authoring declarations and runtime resources must come from the same checked source. Fix drift through the companion host's canonical generators and commit their outputs before updating the pin; do not mask it with plugin-local declarations or mocks that widen the real API.
+
+Plugin `v*` tags and a manual public-release override require a compatible, published official Orca release. That gate is separate from the default source-built SDK and cannot be satisfied by a companion-fork build. There is currently no verified public release satisfying it. See the [release guide](releasing.md#github-检查) for the publication boundary.
 
 These statements describe the workflow configuration. Cloud results are recorded in repository [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions); cite the complete SDK job logs for the corresponding commit and run when reporting a successful cloud check. The recorded 185 tests and 11 scenarios above remain the local verification baseline.
 

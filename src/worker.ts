@@ -6,7 +6,7 @@ import type { ListWorkItemsOutput, WorkItemDetail, WorkItemId, WorkItemSummary }
 import { MAX_COMMENT_LENGTH } from './protocol'
 import { MeegoApiError, MeegoClient, type RawWorkItem } from './meego/client'
 import { cacheFor, invalidateLists, LIST_TTL_MS, projectCache, readCache, TYPES_TTL_MS } from './meego/cache'
-import { buildWorkItemUrl, loadMeegoConfig, parseWorkItemLink, SECRET_KEYS, verifiedWorkItemUrl, type MeegoConfig } from './meego/config'
+import { buildWorkItemUrl, parseWorkItemLink, verifiedWorkItemUrl, type MeegoConfig } from './meego/config'
 import { MeegoConnection, RequestError, type ProjectClient } from './meego/connection'
 import { MeegoOAuthError } from './meego/oauth'
 import { FIELD_VALUE_LIMIT } from './meego/prompt'
@@ -132,6 +132,16 @@ export default function activate(orca: OrcaWorkerApi): void {
     orca.panels.post('meego.connectionChanged', { reason: 'disconnected' })
     return { ok: true }
   })
+  orca.panels.handle('meego.removeConnection', async () => {
+    let removed = false
+    try {
+      await connection.remove()
+      removed = true
+      return { ok: true }
+    } finally {
+      orca.panels.post('meego.connectionChanged', { reason: removed ? 'removed' : 'configuration' })
+    }
+  })
   orca.panels.handle('meego.listSpaces', (input) => connection.listSpaces(input?.search?.trim(), input?.page))
   orca.panels.handle('meego.selectSpace', async ({ key }) => {
     await connection.selectSpace(key)
@@ -143,15 +153,14 @@ export default function activate(orca: OrcaWorkerApi): void {
     if (typeof pluginId !== 'string' || typeof pluginSecret !== 'string' || !pluginId.trim() || !pluginSecret.trim()) {
       throw new RequestError('invalid_input', 'Plugin ID 和 Plugin Secret 都不能为空。')
     }
-    const { baseUrl } = await loadMeegoConfig(orca)
-    await orca.secrets.set(SECRET_KEYS.credentials, JSON.stringify({ baseUrl, pluginId: pluginId.trim(), pluginSecret: pluginSecret.trim() }))
+    await connection.saveCredentials(pluginId.trim(), pluginSecret.trim())
     return { ok: true }
   })
 
   orca.panels.handle('meego.testConnection', async () => {
     const { config, client } = await connection.legacyProject()
     const types = await client.workItemTypes()
-    await connection.useLegacy()
+    await connection.useLegacy(config)
     orca.panels.post('meego.connectionChanged', { reason: 'enterprise' })
     return { ok: true, projectKey: config.projectKey, userKey: config.userKey, typeCount: types.length }
   })

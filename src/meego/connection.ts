@@ -1,7 +1,8 @@
 import type { OrcaWorkerApi } from 'orca/worker'
 import type { AuthorizationStatus, MeegoSpace, MeegoStatus, WorkItemSource } from '../protocol'
 import { MeegoClient } from './client'
-import { loadMeegoConfig, missingConfigItems, type MeegoConfig } from './config'
+import { DEFAULT_BASE_URL, DEFAULT_WEB_URL_TEMPLATE, loadMeegoConfig, missingConfigItems, SECRET_KEYS, SETTING_KEYS, type MeegoConfig } from './config'
+import { currentFetch } from './fetch-provider'
 import { MeegoMcpClient } from './mcp-client'
 import { MeegoOAuth, oauthOrigin } from './oauth'
 import { storageJson } from './storage-json'
@@ -14,6 +15,10 @@ interface Account {
   sessionId: string
   user: { key: string; name: string }
   space: MeegoSpace | null
+}
+
+function removalPending(value: unknown): boolean {
+  return value !== null && typeof value === 'object' && 'mode' in value && value.mode === 'removing'
 }
 
 export class RequestError extends Error {
@@ -33,17 +38,35 @@ export class MeegoConnection {
   private accountLoad: Promise<Account> | null = null
   private pollRequest: Promise<AuthorizationStatus> | null = null
   private generation = 0
+  private changing = false
+  private accountWrites: Promise<void> = Promise.resolve()
 
   constructor(private readonly orca: OrcaWorkerApi) {
     this.oauth = new MeegoOAuth(orca)
   }
 
   async status(): Promise<MeegoStatus> {
+    this.assertIdle()
+    const generation = this.generation
+    const prior = await this.orca.storage.get(ACCOUNT_KEY)
+    this.assertGeneration(generation)
+    if (removalPending(prior)) {
+      return {
+        configured: false,
+        baseUrl: DEFAULT_BASE_URL,
+        projectKey: '',
+        userKey: '',
+        missing: [],
+        hasSavedConnection: true,
+        connection: { state: 'disconnected', removalPending: true }
+      }
+    }
     const legacy = await loadMeegoConfig(this.orca)
     const baseUrl = oauthOrigin(legacy.baseUrl)
     const sessionId = baseUrl === null ? null : await this.oauth.sessionId(baseUrl)
     if (baseUrl !== null && sessionId !== null) {
       const account = await this.getAccount(baseUrl, legacy, sessionId)
+      this.assertGeneration(generation)
       const authorization = this.oauth.pending(baseUrl)
       return {
         configured: account.space !== null,
@@ -52,6 +75,7 @@ export class MeegoConnection {
         userKey: account.user.key,
         defaultAgent: legacy.agentCommand,
         missing: [],
+        hasSavedConnection: true,
         ...(authorization ? { authorization } : {}),
         connection: account.space === null
           ? { state: 'choose_space', accountName: account.user.name }
@@ -59,7 +83,7 @@ export class MeegoConnection {
       }
     }
     const missing = missingConfigItems(legacy)
-    const prior = await this.orca.storage.get(ACCOUNT_KEY)
+    this.assertGeneration(generation)
     const configured = missing.length === 0 && prior === null
     const authorization = this.oauth.pending(legacy.baseUrl)
     return {
@@ -69,21 +93,30 @@ export class MeegoConnection {
       userKey: configured ? legacy.userKey : '',
       defaultAgent: legacy.agentCommand,
       missing,
+      hasSavedConnection: prior !== null || legacy.pluginId !== '' || legacy.pluginSecret !== '' || legacy.projectKey !== '' || legacy.userKey !== '' || legacy.baseUrl !== DEFAULT_BASE_URL || legacy.webUrlTemplate !== DEFAULT_WEB_URL_TEMPLATE,
       ...(authorization ? { authorization } : {}),
       ...(configured ? {} : { connection: { state: 'disconnected' as const } })
     }
   }
 
   async begin() {
+    this.assertIdle()
+    const generation = this.generation
+    await this.assertRemovalFinished()
     const { baseUrl } = await loadMeegoConfig(this.orca)
+    this.assertGeneration(generation)
     return this.oauth.start(baseUrl)
   }
 
   async poll() {
+    this.assertIdle()
     if (this.pollRequest) return this.pollRequest
+    const generation = this.generation
     const request = this.oauth.poll().then(async (result) => {
+      if (generation !== this.generation) return { state: 'expired' as const }
       if (result.state === 'authorized') {
         await this.rememberOAuthMode()
+        if (generation !== this.generation) return { state: 'expired' as const }
         this.clearClients()
       }
       return result
@@ -92,19 +125,49 @@ export class MeegoConnection {
     try {
       return await request
     } finally {
-      this.pollRequest = null
+      if (this.pollRequest === request) this.pollRequest = null
     }
   }
 
   async disconnect(): Promise<void> {
-    await this.rememberOAuthMode()
-    await this.oauth.disconnect()
-    this.clearClients()
+    await this.change(async () => {
+      await this.rememberOAuthMode()
+      await this.oauth.disconnect()
+    })
   }
 
-  async useLegacy(): Promise<void> {
-    await this.disconnect()
-    await this.orca.storage.delete(ACCOUNT_KEY)
+  async remove(): Promise<void> {
+    await this.change(async () => {
+      await this.writeAccount(() => this.orca.storage.set(ACCOUNT_KEY, { mode: 'removing' }))
+      await this.oauth.disconnect()
+      for (const key of Object.values(SECRET_KEYS)) await this.orca.secrets.delete(key)
+      for (const [key, value] of [
+        [SETTING_KEYS.baseUrl, DEFAULT_BASE_URL], [SETTING_KEYS.projectKey, ''],
+        [SETTING_KEYS.userKey, ''], [SETTING_KEYS.webUrlTemplate, DEFAULT_WEB_URL_TEMPLATE]
+      ]) await this.orca.settings.set(key, value)
+      await this.writeAccount(() => this.orca.storage.delete(ACCOUNT_KEY))
+    })
+  }
+
+  async saveCredentials(pluginId: string, pluginSecret: string): Promise<void> {
+    await this.change(async () => {
+      await this.assertRemovalFinished()
+      const { baseUrl } = await loadMeegoConfig(this.orca)
+      await this.orca.secrets.set(SECRET_KEYS.credentials, JSON.stringify({ baseUrl, pluginId, pluginSecret }))
+    })
+  }
+
+  async useLegacy(expected: MeegoConfig): Promise<void> {
+    await this.change(async () => {
+      await this.assertRemovalFinished()
+      const current = await loadMeegoConfig(this.orca)
+      if ((['baseUrl', 'projectKey', 'userKey', 'pluginId', 'pluginSecret'] as const).some((key) => current[key] !== expected[key])) {
+        throw this.sessionChanged()
+      }
+      await this.rememberOAuthMode()
+      await this.oauth.disconnect()
+      await this.writeAccount(() => this.orca.storage.delete(ACCOUNT_KEY))
+    })
   }
 
   async listSpaces(search?: string, page?: number) {
@@ -127,18 +190,28 @@ export class MeegoConnection {
 
   async selectSpace(key: string): Promise<void> {
     const { account } = await this.requireAccount()
+    const generation = this.generation
     const space = this.spaces.get(key)
     if (space === undefined) throw new RequestError('space_unavailable', '请从当前账号可访问的空间中选择。')
-    await this.orca.storage.set(ACCOUNT_KEY, storageJson({ ...account, space }))
+    await this.writeAccount(async () => {
+      const sessionId = await this.oauth.sessionId(account.baseUrl)
+      this.assertGeneration(generation)
+      if (sessionId !== account.sessionId) throw this.sessionChanged()
+      await this.orca.storage.set(ACCOUNT_KEY, storageJson({ ...account, space }))
+    })
   }
 
   async project(source?: WorkItemSource, expectedUserKey?: string): Promise<ProjectClient> {
+    this.assertIdle()
+    const generation = this.generation
+    if (removalPending(await this.orca.storage.get(ACCOUNT_KEY))) throw this.sessionChanged()
     const config = await loadMeegoConfig(this.orca)
     const baseUrl = oauthOrigin(config.baseUrl)
     const sessionId = baseUrl === null ? null : await this.oauth.sessionId(baseUrl)
     if (baseUrl !== null && sessionId !== null) {
       if (source !== undefined && source.baseUrl !== baseUrl) throw this.sourceMismatch()
       const account = await this.getAccount(baseUrl, config, sessionId)
+      this.assertGeneration(generation)
       this.checkActor(account.user.key, expectedUserKey)
       const key = source?.projectKey ?? account.space?.key
       if (!key) throw new RequestError('space_required', '请先选择飞书项目空间。')
@@ -151,11 +224,17 @@ export class MeegoConnection {
       throw new RequestError('consent_required', '飞书项目授权已断开，请重新连接。')
     }
     this.checkActor(config.userKey, expectedUserKey)
+    this.assertGeneration(generation)
     return this.legacy(config, source)
   }
 
   async legacyProject(): Promise<ProjectClient> {
-    return this.legacy(await loadMeegoConfig(this.orca))
+    this.assertIdle()
+    const generation = this.generation
+    await this.assertRemovalFinished()
+    const config = await loadMeegoConfig(this.orca)
+    this.assertGeneration(generation)
+    return this.legacy(config)
   }
 
   private legacy(config: MeegoConfig, source?: WorkItemSource): ProjectClient {
@@ -165,7 +244,7 @@ export class MeegoConnection {
       throw this.sourceMismatch()
     }
     const scope = JSON.stringify([this.generation, 'legacy', config.baseUrl, config.projectKey, config.userKey, config.pluginId, config.pluginSecret])
-    return { config, client: this.client(scope, () => new MeegoClient({ config })) }
+    return { config, client: this.client(scope, () => new MeegoClient({ config, fetchImpl: this.fetchForConnection() })) }
   }
 
   private client(scope: string, create: () => MeegoClient | MeegoMcpClient) {
@@ -181,15 +260,22 @@ export class MeegoConnection {
   }
 
   private mcp(config: MeegoConfig, sessionId: string) {
+    const generation = this.generation
     return new MeegoMcpClient({
       config,
+      fetchImpl: this.fetchForConnection(),
       token: async (rejected) => {
+        this.assertGeneration(generation)
         if (await this.oauth.sessionId(config.baseUrl) !== sessionId) throw this.sessionChanged()
+        this.assertGeneration(generation)
         const token = await this.oauth.token(config.baseUrl, rejected)
         if (await this.oauth.sessionId(config.baseUrl) !== sessionId) throw this.sessionChanged()
+        this.assertGeneration(generation)
         return token
       },
-      invalidate: (rejected) => this.oauth.invalidate(config.baseUrl, rejected)
+      invalidate: async (rejected) => {
+        if (generation === this.generation && !this.changing) await this.oauth.invalidate(config.baseUrl, rejected)
+      }
     })
   }
 
@@ -208,13 +294,18 @@ export class MeegoConnection {
   }
 
   private async requireAccount() {
+    this.assertIdle()
+    const generation = this.generation
+    if (removalPending(await this.orca.storage.get(ACCOUNT_KEY))) throw this.sessionChanged()
     const config = await loadMeegoConfig(this.orca)
     const baseUrl = oauthOrigin(config.baseUrl)
     const sessionId = baseUrl === null ? null : await this.oauth.sessionId(baseUrl)
     if (baseUrl === null || sessionId === null) {
       throw new RequestError('consent_required', '请先连接飞书项目账号。')
     }
-    return { config, account: await this.getAccount(baseUrl, config, sessionId) }
+    const account = await this.getAccount(baseUrl, config, sessionId)
+    this.assertGeneration(generation)
+    return { config, account }
   }
 
   private async getAccount(baseUrl: string, config: MeegoConfig, sessionId: string): Promise<Account> {
@@ -226,9 +317,12 @@ export class MeegoConnection {
     const pending = (async () => {
       const user = await client.currentUser()
       const space = stored?.baseUrl === baseUrl && stored.user.key === user.key ? stored.space : null
-      if (this.generation !== generation || await this.oauth.sessionId(baseUrl) !== sessionId) throw this.sessionChanged()
       const account = { baseUrl, sessionId, user, space }
-      await this.orca.storage.set(ACCOUNT_KEY, storageJson(account))
+      await this.writeAccount(async () => {
+        if (await this.oauth.sessionId(baseUrl) !== sessionId) throw this.sessionChanged()
+        this.assertGeneration(generation)
+        await this.orca.storage.set(ACCOUNT_KEY, storageJson(account))
+      })
       return account
     })()
     this.accountLoad = pending
@@ -245,11 +339,54 @@ export class MeegoConnection {
     this.spaces.clear()
     this.directory = null
     this.accountLoad = null
+    this.pollRequest = null
   }
 
   private async rememberOAuthMode(): Promise<void> {
-    if (await this.orca.storage.get(ACCOUNT_KEY) === null) {
-      await this.orca.storage.set(ACCOUNT_KEY, { mode: 'oauth' })
+    await this.writeAccount(async () => {
+      const stored = await this.orca.storage.get(ACCOUNT_KEY)
+      if (stored === null) await this.orca.storage.set(ACCOUNT_KEY, { mode: 'oauth' })
+    })
+  }
+
+  private writeAccount(operation: () => Promise<void>): Promise<void> {
+    const task = this.accountWrites.then(operation)
+    this.accountWrites = task.catch(() => {})
+    return task
+  }
+
+  private async change(operation: () => Promise<void>): Promise<void> {
+    this.assertIdle()
+    this.changing = true
+    this.clearClients()
+    this.oauth.cancel()
+    try {
+      await operation()
+    } finally {
+      this.changing = false
+    }
+  }
+
+  private assertIdle(): void {
+    if (this.changing) throw new RequestError('connection_busy', '连接正在更新，请稍后重试。')
+  }
+
+  private async assertRemovalFinished(): Promise<void> {
+    if (removalPending(await this.orca.storage.get(ACCOUNT_KEY))) {
+      throw new RequestError('connection_cleanup_required', '上次连接移除尚未完成，请先重试移除。')
+    }
+  }
+
+  private assertGeneration(generation: number): void {
+    if (generation !== this.generation || this.changing) throw this.sessionChanged()
+  }
+
+  private fetchForConnection() {
+    const generation = this.generation
+    const fetch = currentFetch()
+    return (url: string, init?: RequestInit) => {
+      this.assertGeneration(generation)
+      return fetch(url, init)
     }
   }
 

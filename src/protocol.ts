@@ -136,7 +136,8 @@ export interface MeegoStatus {
   defaultAgent?: string
   missing: MissingConfigItem[]
   authorization?: AuthorizationChallenge
-  connection?: { state: 'disconnected' | 'choose_space' | 'connected'; accountName?: string; spaceName?: string }
+  hasSavedConnection?: boolean
+  connection?: { state: 'disconnected' | 'choose_space' | 'connected'; accountName?: string; spaceName?: string; removalPending?: boolean }
 }
 
 export interface WorkItemSource {
@@ -263,6 +264,7 @@ declare module 'orca' {
     'meego.pollAuthorization': { output: AuthorizationStatus }
     'meego.cancelAuthorization': { output: { ok: boolean } }
     'meego.disconnect': { output: { ok: boolean } }
+    'meego.removeConnection': { output: { ok: boolean } }
     'meego.listSpaces': { input: { search?: string; page?: number }; output: { spaces: MeegoSpace[]; hasMore: boolean } }
     'meego.selectSpace': { input: { key: string }; output: { ok: boolean } }
     'meego.openWorkItemLink': { input: { url: string; expectedUserKey?: string }; output: { item: WorkItemDetail } }
@@ -307,7 +309,7 @@ declare module 'orca' {
     'meego.sendToAgent': { input: { id: WorkItemId; typeKey: string; source?: WorkItemSource; workspaceId?: string; terminalId?: string | null; agent?: string; linked?: boolean; expectedUserKey?: string; expectedLinkedAt?: number | null }; output: SendToAgentOutput }
   }
   interface PluginPanelEvents {
-    'meego.connectionChanged': { reason: 'authorized' | 'disconnected' | 'space' | 'enterprise' }
+    'meego.connectionChanged': { reason: 'authorized' | 'disconnected' | 'space' | 'enterprise' | 'removed' | 'configuration' }
     /** The focused workspace's link changed (linked, unlinked, or the workspace moved). */
     'meego.linkChanged': { workspaceId: string | null }
   }

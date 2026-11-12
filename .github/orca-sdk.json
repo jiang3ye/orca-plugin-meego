@@ -1,8 +1,4 @@
 {
-  "repository": "jiang3ye/orca-plugin-meego",
-  "releaseTag": "ci-host-ea5060de66aa",
-  "asset": "Orca-1.4.256-local.1794445688156.ea5060de66aa-arm64-mac.zip",
-  "sha256": "e9c8810420031e4fc568c66b68867c18b6af451736b43529c442e07b82b34865",
-  "version": "1.4.256-local.1794445688156.ea5060de66aa",
-  "hostCommit": "ea5060de66aa1dca5f6b783d5f7e8acb04f80c12"
+  "repository": "jiang3ye/orca",
+  "commit": "a1ed6a8d1e554e1308f1dea6bdfc08667b112891"
 }

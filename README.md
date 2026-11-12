@@ -2,17 +2,21 @@
 
 在 Orca 侧栏连接飞书项目，浏览和维护工作项，关联开发工作区，再把工作项交给 Agent。个人连接使用飞书项目官方 OAuth，无需手动填写用户 ID、空间 ID 或插件密钥。
 
+这是独立社区集成，非 Orca、飞书项目或 Meegle 官方产品。
+
 **实验性项目：当前需要配套的自定义 Orca 宿主。公开版 Orca 暂不具备本项目依赖的全部平台 API。**
 
 ## 兼容性
 
-核查的公开版 Orca 1.4.256 和公开主分支缺少本项目使用的部分平台能力，包括原生集成设置页、插件设置导航、可验证的工作区标识和按主机发现 Agent。不能仅依据版本号安装使用。
+已核查的公开 Orca **v1.4.257** 仍缺少本项目依赖的扩展，包括原生集成设置页、插件设置导航、可验证的工作区标识和按主机发现 Agent；其[严格面板 schema](https://github.com/stablyai/orca/blob/v1.4.257/src/shared/plugins/contributions/plugin-panel-contribution.ts)会拒绝当前使用的 `location` 字段。不能仅依据版本号安装使用。
 
-配套平台功能基线为宿主提交 `9df199ef`，已有本地安装和分段验收记录。日常 CI 的配套 SDK 使用包含生成类型与运行时资源同步修复的后续提交；精确宿主提交、CLI 版本和 ZIP SHA256 以 [`.github/orca-sdk.json`](.github/orca-sdk.json) 为准。这些改动尚未进入已验证的公开宿主版本。安装版本号更高的公开版不代表包含这些改动。manifest 中的宿主版本下限是平台语法门槛，不是公开版兼容承诺。
+配套宿主已有本地安装和分段验收记录。日常 CI 从 [`.github/orca-sdk.json`](.github/orca-sdk.json) 固定的 `jiang3ye/orca` 源码完整提交构建真实 Orca CLI，并校验生成声明与运行时资源一致。这些扩展尚未完成官方公开宿主发布；manifest 中的宿主版本下限是平台语法门槛，不是公开版兼容承诺。
 
 开始前需准备包含配套改动的宿主和与其匹配的 CLI。开发与发布流程见[开发指南](docs/development.md)和[发布指南](docs/releasing.md)。
 
 ## 快速开始
+
+安装、禁用、卸载、移除开发挂载，以及断开或移除飞书连接的区别，见[安装与生命周期](docs/lifecycle.md)。
 
 1. 在配套宿主加载插件，打开「设置 → 集成 → 飞书项目（Meego）」，点击「连接飞书项目」，在浏览器完成授权。侧栏「集成设置」可直达此页。
 2. 返回 Orca，按名称选择可访问的空间。插件会保留该账号选择的空间。
@@ -77,9 +81,9 @@ orca plugin inspect . --json
 
 `check` 会生成官方 SDK 类型，依次运行 manifest 校验、严格类型检查、离线测试、面板场景和源码清单检查。CLI 由兼容的 Orca 构建提供，不要安装同名 npm 包。测试与检查场景使用合成数据和离线 mock，不需要真实账号。
 
-每次 push 和 pull request 的 CI 配置同时包含三系统源码检查与 macOS 15 ARM64 的完整 SDK 检查。默认 SDK 来自私有内部 prerelease 的 `ci-host-<commit12>` 配套构建，按固定 ZIP SHA256、宿主提交和 CLI 版本校验，不使用 `latest`。该资源是 CI 依赖，不是插件版本发布或公开 Orca 兼容证明。
+每次 push 和 pull request 的 CI 配置同时包含三系统源码检查与 macOS 15 ARM64 的完整 SDK 检查。默认流程检出固定宿主源码提交，用 canonical generation 的 `--check` 校验 SDK 声明与运行时，运行宿主官方 CLI 构建，再确认 `out/package.json.commit` 与固定提交完全一致；不下载私有全量宿主 ZIP，也不使用手写 SDK 替代。
 
-插件 `v*` 标签及手动选择公开宿主版本的检查另有门槛：必须使用已发布、已验证包含所需 API 的官方 Orca release，不回退到私有配套 SDK。当前尚无符合条件的公开版本。每次云端结果见仓库 [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions)，以对应提交和运行的完整 SDK job 日志为依据；前述 185 项测试和 11 个场景是本地验证基线。详见[发布指南](docs/releasing.md#github-检查)。
+插件 `v*` 标签及手动选择公开宿主版本的检查另有门槛：必须使用已发布、已验证包含所需 API 的官方 Orca release，不能用配套分支的源码构建代替。当前尚无符合条件的已验证公开版本。每次云端结果见仓库 [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions)，以对应提交和运行的完整 SDK job 日志为依据；前述 185 项测试和 11 个场景是本地验证基线。详见[发布指南](docs/releasing.md#github-检查)。
 
 - [开发指南](docs/development.md)：模块职责、SDK 类型和验证流程。
 - [架构说明](docs/architecture.md)：请求边界、持久状态与写入保护。

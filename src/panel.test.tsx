@@ -98,6 +98,29 @@ function baseRequests(overrides: Record<string, (input: never) => unknown>): Rec
   }
 }
 
+test('removing the connection clears the sidebar business list and open detail', async () => {
+  let connected = true
+  const host = mockHost({ requests: baseRequests({
+    'meego.status': () => connected ? STATUS_CONFIGURED : { ...STATUS_UNCONFIGURED, hasSavedConnection: false },
+    'meego.getWorkItem': () => ({ item: DETAIL })
+  }) })
+  const view = await mount(panel, { host, persisted: { plugin: { 'meego.viewMode': 'table' } } })
+  try {
+    await panel.initialLoad
+    await view.activateRow({ label: '工作项列表' }, '6801')
+    assert.notEqual(view.find({ text: '#6801 实现登录' }), null)
+    connected = false
+    await view.post('meego.connectionChanged', { reason: 'removed' })
+    assert.equal(view.find({ label: '工作项列表' }), null)
+    assert.equal(view.find({ text: '#6801 实现登录' }), null)
+    assert.notEqual(view.find({ text: '连接飞书项目' }), null)
+    assert.deepEqual(view.errors, [])
+    assert.deepEqual(view.refusals, [])
+  } finally {
+    await view.unmount()
+  }
+})
+
 test('shows the setup card until credentials save, then loads the list', async () => {
   let configured = false
   const host = mockHost({

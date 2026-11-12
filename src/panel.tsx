@@ -38,7 +38,7 @@ import type {
   WorkItemType,
   WorkItemSummary
 } from './protocol'
-import { ConnectionPanel, connectionChanging, disposeConnection, loadSpaces, resumeAuthorization } from './panel-connection'
+import { ConnectionPanel, connectionChanging, disposeConnection, loadSpaces, resetConnectionInputs, resumeAuthorization } from './panel-connection'
 import { HandoffView, beginHandoff, cancelHandoff, handoffBusy, type ItemRef } from './panel-handoff'
 import { CreateForm, createBusy, createOpen, resetCreate, toggleCreate } from './panel-create'
 import { CommentsPanel, commentBusy, resetComments } from './panel-comments'
@@ -324,7 +324,10 @@ export let initialLoad: Promise<void> = Promise.resolve()
 
 export function setup(ctx: PanelContext): void {
   ctx.subscriptions.push(plugin.on('meego.linkChanged', () => void refreshContext()))
-  ctx.subscriptions.push(plugin.on('meego.connectionChanged', () => void refreshAll()))
+  ctx.subscriptions.push(plugin.on('meego.connectionChanged', () => {
+    resetConnectionInputs()
+    void refreshAll()
+  }))
   ctx.subscriptions.push(on('workspace.changed', () => void refreshContext()))
   ctx.subscriptions.push(on('agent.status.changed', () => void refreshContext()))
   initialLoad = refreshAll()

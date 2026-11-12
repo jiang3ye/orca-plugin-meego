@@ -19,6 +19,7 @@ const spacesErrorAtom = atom<string | null>(null)
 const advancedOpenAtom = atom(false)
 const pluginIdAtom = atom('')
 const pluginSecretAtom = atom('')
+const removeConfirmationAtom = atom(false)
 
 let pollTimer: ReturnType<typeof setTimeout> | undefined
 let spaceRequest = 0
@@ -47,9 +48,17 @@ export function connectionChanging(): boolean {
 }
 
 export function disposeConnection(): void {
-  clearTimeout(pollTimer)
-  authorizationEpoch += 1
-  spaceRequest += 1
+  resetConnectionInputs()
+}
+
+export function resetConnectionInputs(): void {
+  resetChallenge()
+  resetSpaces()
+  set(pluginIdAtom, '')
+  set(pluginSecretAtom, '')
+  set(advancedOpenAtom, false)
+  set(removeConfirmationAtom, false)
+  set(connectionErrorAtom, null)
 }
 
 function resetChallenge(): void {
@@ -154,9 +163,21 @@ function cancelAuthorization(refresh: Refresh): Promise<void> {
 
 function disconnect(refresh: Refresh): Promise<void> {
   return changeConnection(async () => {
+    resetConnectionInputs()
+    await plugin.request('meego.disconnect')
+    await refresh()
+  })
+}
+
+function removeConnection(refresh: Refresh): Promise<void> {
+  return changeConnection(async () => {
     resetChallenge()
     resetSpaces()
-    await plugin.request('meego.disconnect')
+    set(pluginIdAtom, '')
+    set(pluginSecretAtom, '')
+    await plugin.request('meego.removeConnection')
+    set(removeConfirmationAtom, false)
+    set(advancedOpenAtom, false)
     await refresh()
   })
 }
@@ -277,8 +298,8 @@ function AdvancedConnection({ status, refresh, busy }: { status: MeegoStatus; re
                 await refresh()
               })}>使用已配置的企业插件</Button>
             ) : null}
-            <Input label="Plugin ID" value={pluginId} maxLength={64} onChange={(value) => set(pluginIdAtom, value)} />
-            <Input label="Plugin Secret" type="password" value={secret} maxLength={128} onChange={(value) => set(pluginSecretAtom, value)} />
+            <Input label="Plugin ID" value={pluginId} maxLength={64} disabled={busy} onChange={(value) => set(pluginIdAtom, value)} />
+            <Input label="Plugin Secret" type="password" value={secret} maxLength={128} disabled={busy} onChange={(value) => set(pluginSecretAtom, value)} />
             <Button disabled={busy || !pluginId.trim() || !secret.trim()} onPress={() => changeConnection(async () => {
               await plugin.request('meego.saveCredentials', { pluginId: pluginId.trim(), pluginSecret: secret.trim() })
               set(pluginSecretAtom, '')
@@ -300,8 +321,10 @@ export function ConnectionPanel({ status, refresh, disabled, settingsView = fals
   const polling = read(authorizationPollingAtom)
   const settingsError = read(settingsErrorAtom)
   const connection = status.connection
+  const blocked = busy || connection?.removalPending === true
   const personal = connection?.state === 'connected' || connection?.state === 'choose_space'
   const choosing = personal && (connection.state === 'choose_space' || read(pickerOpenAtom))
+  const canRemove = settingsView && (status.hasSavedConnection || status.configured || personal || read(advancedOpenAtom) || read(pluginIdAtom) || read(pluginSecretAtom))
   return (
     <Stack gap="sm">
       <Row gap="sm" justify="between" align="center" wrap>
@@ -350,13 +373,14 @@ export function ConnectionPanel({ status, refresh, disabled, settingsView = fals
         <Row gap="xs" wrap>
           <Text size="sm" muted>企业插件连接</Text>
           <Button size="sm" variant="ghost" disabled={busy} onPress={() => beginAuthorization()}>连接飞书账号</Button>
+          <Button size="sm" variant="ghost" disabled={busy} onPress={() => disconnect(refresh)}>断开连接</Button>
         </Row>
       ) : (
         <Card title="连接你的飞书项目空间">
           <Stack gap="sm">
             <Text size="sm" muted>用飞书账号授权，即可浏览你能访问的空间、查找工作项并关联 Orca 工作区。</Text>
             <Row justify="start">
-              <Button icon="plug" disabled={busy} onPress={() => beginAuthorization()}>{busy ? '正在准备…' : '连接飞书项目'}</Button>
+              <Button icon="plug" disabled={blocked} onPress={() => beginAuthorization()}>{busy ? '正在准备…' : '连接飞书项目'}</Button>
             </Row>
           </Stack>
         </Card>
@@ -364,8 +388,20 @@ export function ConnectionPanel({ status, refresh, disabled, settingsView = fals
       {error !== null ? <Callout tone="danger" title="连接失败"><Text size="sm">{error}</Text></Callout> : null}
       {settingsError !== null ? <Callout tone="danger" title="无法打开集成设置"><Text size="sm">{settingsError}</Text></Callout> : null}
       {networkError !== null ? <Callout tone="warning" title="正在重试授权检查"><Text size="sm">{networkError}</Text></Callout> : null}
+      {connection?.removalPending ? <Callout tone="warning" title="上次移除尚未完成"><Text size="sm">旧连接已停用。请在集成设置中重试移除，完成后再重新连接。</Text></Callout> : null}
       {challenge === null && choosing ? <SpacePicker refresh={refresh} busy={busy} currentKey={status.projectKey} /> : null}
-      {challenge === null && !personal ? <AdvancedConnection status={status} refresh={refresh} busy={busy} /> : null}
+      {challenge === null && !personal ? <AdvancedConnection status={status} refresh={refresh} busy={blocked} /> : null}
+      {canRemove ? <Stack gap="xs">
+        {read(removeConfirmationAtom) ? <Callout tone="warning" title="移除此插件保存的连接配置？">
+          <Stack gap="sm">
+            <Text size="sm">删除本机授权、企业密钥、账号与空间选择及高级连接配置。已有关联和创建记录保留；不会删除远端工作项或本地工作区，也不会关闭 Agent。</Text>
+            <Row gap="xs" wrap>
+              <Button size="sm" variant="solid" tone="danger" disabled={busy} onPress={() => removeConnection(refresh)}>{busy ? '正在移除…' : '确认移除连接'}</Button>
+              <Button size="sm" variant="ghost" disabled={busy} onPress={() => set(removeConfirmationAtom, false)}>保留连接</Button>
+            </Row>
+          </Stack>
+        </Callout> : <Row justify="start"><Button size="sm" variant="ghost" tone="danger" disabled={busy} onPress={() => set(removeConfirmationAtom, true)}>{connection?.removalPending ? '重试移除连接' : '移除连接'}</Button></Row>}
+      </Stack> : null}
     </Stack>
   )
 }

@@ -1,6 +1,6 @@
 import { atom, Button, Callout, Skeleton, Stack, Text, plugin, read, set, type PanelContext } from 'orca'
 import type { MeegoStatus } from './protocol'
-import { ConnectionPanel, disposeConnection, loadSpaces, resumeAuthorization } from './panel-connection'
+import { ConnectionPanel, disposeConnection, loadSpaces, resetConnectionInputs, resumeAuthorization } from './panel-connection'
 
 // This settings frame owns its status and request lifetime independently of the sidebar.
 const statusAtom = atom<MeegoStatus | null>(null)
@@ -32,7 +32,10 @@ async function refresh(): Promise<void> {
 export let initialLoad: Promise<void> = Promise.resolve()
 
 export function setup(context: PanelContext): void {
-  context.subscriptions.push(plugin.on('meego.connectionChanged', () => void refresh()))
+  context.subscriptions.push(plugin.on('meego.connectionChanged', () => {
+    resetConnectionInputs()
+    void refresh()
+  }))
   context.subscriptions.push({ dispose() {
     requestGeneration += 1
     disposeConnection()

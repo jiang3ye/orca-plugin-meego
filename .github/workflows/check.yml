@@ -57,8 +57,53 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      - name: Select the SDK source
+        id: sdk
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF_TYPE" == tag || -n "$ORCA_RELEASE" ]]; then
+            echo 'source=public' >> "$GITHUB_OUTPUT"
+          else
+            repository=$(jq -er '.repository | select(test("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"))' .github/orca-sdk.json)
+            commit=$(jq -er '.commit | select(test("^[a-f0-9]{40}$"))' .github/orca-sdk.json)
+            printf 'source=source\nrepository=%s\ncommit=%s\n' "$repository" "$commit" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check out the pinned companion host source
+        if: steps.sdk.outputs.source == 'source'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ steps.sdk.outputs.repository }}
+          ref: ${{ steps.sdk.outputs.commit }}
+          path: .orca/ci-host
+          persist-credentials: false
+      - name: Build the real CLI from the pinned source
+        if: steps.sdk.outputs.source == 'source'
+        shell: bash
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+          ORCA_CLI_BUILD_COMPILER: tsrs
+        run: |
+          set -euo pipefail
+          npm install --global pnpm@12.14.0 --ignore-scripts --no-audit --no-fund
+          host_root="$GITHUB_WORKSPACE/.orca/ci-host"
+          cd "$host_root"
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm run build:packages
+          pnpm generate:plugin-schemas
+          pnpm generate:plugin-author-typings
+          pnpm generate:plugin-declarative-typings --check
+          pnpm generate:plugin-declarative-runtime --check
+          git diff --exit-code
+          pnpm run build:cli
+          pnpm exec node config/scripts/cli-build/verify-cli-bin.mjs --run-help
+          cli_bin="$RUNNER_TEMP/meego-orca-cli"
+          mkdir -p "$cli_bin"
+          ln -s "$host_root/out/cli/index.js" "$cli_bin/orca"
+          printf '%s\n' "$cli_bin" >> "$GITHUB_PATH"
+          printf 'ORCA_CI_HOST_ROOT=%s\nORCA_CI_SDK_SOURCE=source\n' "$host_root" >> "$GITHUB_ENV"
       - name: Install the pinned SDK without opening the desktop
-        id: host
+        if: steps.sdk.outputs.source == 'public'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -68,26 +113,16 @@ jobs:
             echo 'The pinned companion SDK requires a macOS ARM64 runner.' >&2
             exit 1
           fi
-          if [[ "$GITHUB_REF_TYPE" == tag || -n "$ORCA_RELEASE" ]]; then
-            if [[ ! "$ORCA_RELEASE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-              echo 'Release tags require a compatible public ORCA_SDK_RELEASE; see docs/releasing.md.' >&2
-              exit 1
-            fi
-            sdk_source=public
-            sdk_repo=stablyai/orca
-            sdk_tag="$ORCA_RELEASE"
-            artifact="Orca-${ORCA_RELEASE#v}-arm64-mac.zip"
-            metadata=$(gh api "repos/$sdk_repo/releases/tags/$sdk_tag")
-            digest=$(jq -er --arg name "$artifact" '.assets[] | select(.name == $name) | .digest | select(test("^sha256:[a-f0-9]{64}$")) | sub("^sha256:"; "")' <<< "$metadata")
-            expected_version="${ORCA_RELEASE#v}"
-          else
-            sdk_source=companion
-            sdk_repo=$(jq -er '.repository' .github/orca-sdk.json)
-            sdk_tag=$(jq -er '.releaseTag' .github/orca-sdk.json)
-            artifact=$(jq -er '.asset' .github/orca-sdk.json)
-            digest=$(jq -er '.sha256 | select(test("^[a-f0-9]{64}$"))' .github/orca-sdk.json)
-            expected_version=$(jq -er '.version' .github/orca-sdk.json)
+          if [[ ! "$ORCA_RELEASE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo 'Release tags require a compatible public ORCA_SDK_RELEASE; see docs/releasing.md.' >&2
+            exit 1
           fi
+          sdk_repo=stablyai/orca
+          sdk_tag="$ORCA_RELEASE"
+          artifact="Orca-${ORCA_RELEASE#v}-arm64-mac.zip"
+          metadata=$(gh api "repos/$sdk_repo/releases/tags/$sdk_tag")
+          digest=$(jq -er --arg name "$artifact" '.assets[] | select(.name == $name) | .digest | select(test("^sha256:[a-f0-9]{64}$")) | sub("^sha256:"; "")' <<< "$metadata")
+          expected_version="${ORCA_RELEASE#v}"
           sdk_dir="$RUNNER_TEMP/meego-orca-sdk"
           mkdir -p "$sdk_dir"
           gh release download "$sdk_tag" --repo "$sdk_repo" --pattern "$artifact" --dir "$sdk_dir"
@@ -100,7 +135,7 @@ jobs:
             exit 1
           fi
           printf '%s\n' "$sdk_dir/unpacked/Orca.app/Contents/Resources/bin" >> "$GITHUB_PATH"
-          printf 'ORCA_CI_APP=%s\nORCA_CI_SDK_SOURCE=%s\n' "$sdk_dir/unpacked/Orca.app" "$sdk_source" >> "$GITHUB_ENV"
+          printf 'ORCA_CI_APP=%s\nORCA_CI_SDK_SOURCE=public\n' "$sdk_dir/unpacked/Orca.app" >> "$GITHUB_ENV"
       - name: Verify SDK identity and method contracts
         run: node scripts/verify-ci-sdk.mjs
       - run: npm ci --ignore-scripts --no-audit --no-fund

@@ -1,21 +1,21 @@
 # 发布准备
 
-当前版本 `0.1.0-dev.1` 是开发预览，目标仓库为 `jiang3ye/orca-plugin-meego`，尚不满足公开稳定发布条件。公开 Orca **v1.4.256** 和核查的公开 main 都没有完整的配套宿主接口；本插件不能声称兼容所有 `>=1.4.255` 的公开安装版。
+当前版本 `0.1.0-dev.1` 是独立社区集成的开发预览，目标仓库为 `jiang3ye/orca-plugin-meego`，非 Orca、飞书项目或 Meegle 官方产品。已核查的公开 Orca **v1.4.257** 仍没有完整的配套宿主接口；本插件不能声称兼容所有 `>=1.4.255` 的公开安装版。
 
 ## 宿主前置条件
 
-配套宿主的功能改动基线为 `9df199efbd6754adcd8944be801028b6634e8e87`，包括：
+配套宿主改动包括：
 
 - `contributes.panels[].location: "settings"` 及原生集成设置页；
 - `settings.open`、`agents.available`；
 - `workspace.readContext.workspaceId`、工作区创建能力；
 - Agent 启动时序和提示投递修复。
 
-日常 CI 的配套 SDK 从这一基线的后续提交构建，并包含生成类型与运行时资源同步修复。精确宿主提交、CLI 版本、ZIP 资源与完整 SHA256 统一记录在 [`.github/orca-sdk.json`](../.github/orca-sdk.json)。不要把功能基线提交当成当前 SDK 固定版本，也不要手动猜测新版本号。
+日常 CI 从 [`.github/orca-sdk.json`](../.github/orca-sdk.json) 指定的 `jiang3ye/orca` 源码完整提交构建真实 Orca CLI。固定记录中的 `repository` 与 `commit` 是构建身份的唯一来源；文档不复制提交 SHA，也不以可移动分支或推测版本替代。
 
-公开版本的[面板严格 schema](https://github.com/stablyai/orca/blob/v1.4.256/src/shared/plugins/contributions/plugin-panel-contribution.ts)会在执行插件之前拒绝新的 `location` 字段。[公开 Host API](https://github.com/stablyai/orca/blob/v1.4.256/docs/reference/plugin-host-api.md)也没有这些扩展。manifest 的 `>=1.4.255` 是开发平台的字段版本下限，不能代替公开宿主兼容证明；不要猜测未来版本号。
+v1.4.257 的[面板严格 schema](https://github.com/stablyai/orca/blob/v1.4.257/src/shared/plugins/contributions/plugin-panel-contribution.ts)会在执行插件之前拒绝新的 `location` 字段；其[Host API](https://github.com/stablyai/orca/blob/v1.4.257/docs/reference/plugin-host-api.md)也没有这些扩展。manifest 的 `>=1.4.255` 是开发平台的字段版本下限，不能代替公开宿主兼容证明；不要猜测未来版本号。
 
-公开发布前，配套宿主改动必须进入已发布、可获取的官方 Orca 版本。使用该版本的 CLI 重新生成 SDK、校验、类型检查并验收，再更新真正的公开最低版本。私有 CI SDK 可用于日常开发检查，不能替代这一公开兼容门槛。完整桌面验收还需按宿主要求使用 Electron 技能和隔离显示环境完成；原生组件截图与分段 API 验证不能代替完整 GUI 流程。
+源码公开和上游草稿 PR 不代表已满足目录可安装版本的发布条件。配套宿主改动仍需上游审查并进入已发布、可获取的官方 Orca 版本；使用该版本的 CLI 重新生成 SDK、校验、类型检查并验收，再更新真正的公开最低版本。日常固定源码构建不能替代这一官方发布门槛。完整桌面验收还需按宿主要求使用 Electron 技能和隔离显示环境完成；原生组件截图与分段 API 验证不能代替完整 GUI 流程。
 
 ## 本地检查和干净快照
 
@@ -45,26 +45,35 @@ npm run release:prepare
 
 | 触发与用途 | 宿主来源 | 检查范围 |
 | --- | --- | --- |
-| 每次 push / pull request 的默认 CI | 固定的私有配套 SDK | Linux、macOS、Windows 源码检查，以及 macOS 15 ARM64 的完整 `npm run check` |
-| 插件 `v*` 标签 / 手动公开版本覆盖 | 已发布且经验证兼容的官方 Orca release | 官方宿主兼容门槛、版本一致性及完整 SDK 检查；不能用私有构建代替 |
+| 每次 push / pull request 的默认 CI | 从固定配套宿主源码提交构建的真实 CLI | Linux、macOS、Windows 源码检查，以及 macOS 15 ARM64 的完整 `npm run check` |
+| 插件 `v*` 标签 / 手动公开版本覆盖 | 已发布且经验证兼容的官方 Orca release | 官方宿主兼容门槛、版本一致性及完整 SDK 检查；不能用配套分支构建代替 |
 
-### 默认配套 SDK
+### 默认源码构建
 
-CI 从私有内部 prerelease `ci-host-<commit12>` 获取配套宿主 ZIP。它是用于 SDK 检查的宿主资源，不是插件 `v*` 标签、插件发布资产或官方 Orca 的 `latest` 版本。下载来源和内容身份以 `.github/orca-sdk.json` 为准，必须绑定完整宿主提交、完整 ZIP SHA256 和准确 CLI 版本。
+公开 CI 检出 `.github/orca-sdk.json` 中的完整宿主提交，不下载私有全量宿主 ZIP。它构建并执行宿主真实 CLI，不使用手写 SDK、占位命令或伪造的宿主响应完成插件检查。
 
-工作流使用该 ZIP 内的 CLI 生成类型并执行测试，避免声明文件与运行时资源来自不同宿主。更新配套 SDK 时，先通过宿主官方生成流程同步这些资源，再从确切的新宿主提交打包；核对 ZIP、提交和 CLI 版本后一起更新固定记录。不能只换声明、追随可变的 `latest`，或使用名称相近的公开版替代。
+在检出的宿主源码中，先安装锁定依赖，再运行 canonical generation 的只读校验和官方 CLI 构建：
+
+```sh
+pnpm install --frozen-lockfile
+pnpm generate:plugin-declarative-typings --check
+pnpm generate:plugin-declarative-runtime --check
+pnpm build:cli
+```
+
+使用产物前必须确认 `out/package.json.commit` 与固定记录中的完整 `commit` 完全一致。之后将该 CLI 用于插件的 SDK 生成和全部检查。更新固定提交时，生成声明与运行时资源应已通过宿主官方生成流程同步并提交；不能只替换声明，或在插件中添加类型镜像掩盖漂移。
 
 macOS 15 ARM64 的 SDK 检查在每次 push 和 pull request 执行完整 `npm run check`：SDK 类型生成、manifest 校验、严格类型检查、离线行为测试、全部面板场景和源码清单检查。当前本地基线为 185 项行为测试和 11 个场景。三系统源码检查仍独立保留，其通过结果不能替代 SDK 检查。
 
-私有资源访问或完整性校验失败应明确失败，不能退化为仅源码检查或跳过 SDK。私有资源下载权限由维护者配置，不能将凭据放入固定记录或发布资产。这里描述的是 CI 配置范围；每次云端结果见仓库 [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions)。报告某次检查通过时，应以对应提交和运行的完整 SDK job 日志为依据，确认各阶段实际执行并通过；185 项测试和 11 个场景仅是本地验证基线。
+固定提交不可获取、生成资源过期或构建身份不一致时应明确失败，不能降级为仅源码检查或跳过 SDK。每次云端结果见仓库 [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions)。报告某次检查通过时，应以对应提交和运行的完整 SDK job 日志为依据，确认各阶段实际执行并通过；185 项测试和 11 个场景仅是本地验证基线。
 
 ### 官方发布门槛
 
-插件 `v*` 标签和手动指定公开宿主版本时，必须选择已发布、可下载并验证包含全部所需 API 的官方 Orca release。该路线核对对应官方 ZIP 的 SHA256、应用身份和 CLI 版本，再执行完整检查；不回退到默认私有配套 SDK。
+插件 `v*` 标签和手动指定公开宿主版本时，必须选择已发布、可下载并验证包含全部所需 API 的官方 Orca release。该路线核对对应官方 ZIP 的 SHA256、应用身份和 CLI 版本，再执行完整检查；不能回退到配套 fork 的源码构建来满足官方发布条件。
 
-当前没有符合条件的已验证官方公开版本。不要填写不兼容的公开 `v1.4.256`，也不要把 `ci-host-*` 内部 prerelease 当作官方版本来解除门槛。发布标签在缺少合格官方宿主时必须明确失败。日常配套 SDK 检查通过不代表插件已满足公开发布或完整桌面验收要求。
+当前没有符合条件的已验证官方公开版本。不要用仍缺少扩展的公开 `v1.4.257`，也不要把配套 fork 或 CI 构建当作官方发布来解除门槛。发布标签在缺少合格官方宿主时必须明确失败。日常源码构建与 SDK 检查通过不代表插件已满足目录发布或完整桌面验收要求。
 
-工作流不创建或发布插件 GitHub Release。内部 CI 宿主资产由维护者单独准备；插件正式发布仍按以下步骤执行。
+工作流不创建或发布插件 GitHub Release；插件正式发布仍按以下步骤执行。
 
 ## 正式发布
 

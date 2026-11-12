@@ -11,6 +11,9 @@ const connected: MeegoStatus = {
   ...disconnected, configured: true, projectKey: 'dev', userKey: 'member',
   connection: { state: 'connected', accountName: '测试账号', spaceName: '研发空间' }
 }
+const enterprise: MeegoStatus = {
+  configured: true, baseUrl: 'https://project.feishu.cn', projectKey: 'dev', userKey: 'member', missing: [], hasSavedConnection: true
+}
 
 test('settings authorizes and selects a space through the connection contract without querying work items or workspaces', async () => {
   let state: 'disconnected' | 'choose_space' | 'connected' = 'disconnected'
@@ -126,5 +129,91 @@ test('connection settings retry a failed read and the sidebar shortcut opens set
     assert.deepEqual(sidebar.refusals, [])
   } finally {
     await sidebar.unmount()
+  }
+})
+
+test('connection removal requires confirmation, allows cancellation and clears unsaved credential fields', async () => {
+  let removed = false
+  const host = mockHost({ requests: {
+    'meego.status': () => removed ? { ...disconnected, hasSavedConnection: false } : enterprise,
+    'meego.removeConnection': (input: unknown) => {
+      assert.equal(input, undefined)
+      removed = true
+      return { ok: true }
+    }
+  } })
+  const view = await mount(settings, { host })
+  try {
+    await settings.initialLoad
+    assert.notEqual(view.find({ text: '断开连接' }), null)
+    await view.press({ text: '高级连接' })
+    await view.type({ label: 'Plugin ID' }, 'unsaved-id')
+    await view.type({ label: 'Plugin Secret' }, 'unsaved-secret')
+    await view.press({ text: '移除连接' })
+    assert.equal(removed, false)
+    await view.press({ text: '保留连接' })
+    assert.equal(removed, false)
+    await view.press({ text: '移除连接' })
+    await view.press({ text: '确认移除连接' })
+    assert.equal(removed, true)
+    assert.notEqual(view.find({ text: '连接飞书项目' }), null)
+    await view.press({ text: '高级连接' })
+    assert.equal(view.find({ label: 'Plugin ID' })?.props.value, '')
+    assert.equal(view.find({ label: 'Plugin Secret' })?.props.value, '')
+    assert.deepEqual(view.errors, [])
+    assert.deepEqual(view.refusals, [])
+  } finally {
+    await view.unmount()
+  }
+})
+
+test('a failed connection removal remains visible and can be retried without reporting success', async () => {
+  let unavailable = true
+  let removed = false
+  const view = await mount(settings, { host: mockHost({ requests: {
+    'meego.status': () => removed ? disconnected : connected,
+    'meego.removeConnection': () => {
+      if (unavailable) throw new Error('无法清理本机凭据')
+      removed = true
+      return { ok: true }
+    }
+  } }) })
+  try {
+    await settings.initialLoad
+    await view.press({ text: '移除连接' })
+    await view.press({ text: '确认移除连接' })
+    assert.equal(removed, false)
+    assert.notEqual(view.find({ text: '无法清理本机凭据' }), null)
+    unavailable = false
+    await view.press({ text: '确认移除连接' })
+    assert.equal(removed, true)
+    assert.equal(view.find({ text: '无法清理本机凭据' }), null)
+    assert.deepEqual(view.errors, [])
+  } finally {
+    await view.unmount()
+  }
+})
+
+test('a connection removed in another frame discards unsaved credential inputs and confirmation state', async () => {
+  let removed = false
+  const view = await mount(settings, { host: mockHost({ requests: {
+    'meego.status': () => removed ? disconnected : enterprise
+  } }) })
+  try {
+    await settings.initialLoad
+    await view.press({ text: '高级连接' })
+    await view.type({ label: 'Plugin ID' }, 'unsaved-id')
+    await view.type({ label: 'Plugin Secret' }, 'unsaved-secret')
+    await view.press({ text: '移除连接' })
+    removed = true
+    await view.post('meego.connectionChanged', { reason: 'removed' })
+    assert.equal(view.find({ text: '确认移除连接' }), null)
+    assert.equal(view.find({ label: 'Plugin Secret' }), null)
+    await view.press({ text: '高级连接' })
+    assert.equal(view.find({ label: 'Plugin ID' })?.props.value, '')
+    assert.equal(view.find({ label: 'Plugin Secret' })?.props.value, '')
+    assert.deepEqual(view.errors, [])
+  } finally {
+    await view.unmount()
   }
 })

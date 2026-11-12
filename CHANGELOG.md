@@ -2,9 +2,12 @@
 
 ## 0.1.0-dev.1 — draft companion-host preview
 
-This preview requires the custom Orca companion platform introduced at commit `9df199ef`. The CI SDK uses a descendant with the generated SDK/runtime synchronization fix; its exact commit, ZIP SHA256 and CLI version are pinned in [`.github/orca-sdk.json`](.github/orca-sdk.json). Public Orca 1.4.256 and public main do not yet include the required APIs. The manifest engine floor is not a public-release compatibility guarantee.
+This is an independent community integration, not an official Orca or Feishu Project / Meegle product. The preview requires companion platform changes. CI builds the real Orca CLI from the exact `jiang3ye/orca` source commit pinned in [`.github/orca-sdk.json`](.github/orca-sdk.json). The checked public Orca v1.4.257 still lacks required APIs, including the `location` field rejected by its [strict panel schema](https://github.com/stablyai/orca/blob/v1.4.257/src/shared/plugins/contributions/plugin-panel-contribution.ts). The manifest engine floor is not a public-release compatibility guarantee.
 
 ### Added
+
+- Connection removal clears local credentials and advanced configuration after confirmation; disconnect preserves preferences without silently falling back to enterprise access.
+- Integration settings link to native plugin management, and development mounts expose their own unload action without deleting source or plugin data.
 
 - Personal Feishu Project OAuth, account discovery and named space selection, with enterprise OpenAPI fallback.
 - A connection-only panel in native Settings → Integrations and a sidebar settings shortcut.
@@ -24,8 +27,8 @@ This preview requires the custom Orca companion platform introduced at commit `9
 ### CI configuration
 
 - Every push and pull request is configured for three-OS source checks and a complete `npm run check` on macOS 15 ARM64, including SDK generation, manifest validation, strict types, offline tests, panel scenarios and source inventory.
-- Default CI uses a SHA256-pinned private companion SDK prerelease named `ci-host-<commit12>`, with the host commit and CLI version recorded in the pin file. It is not a plugin version release or an official Orca `latest` build.
-- Plugin `v*` tags and manual public-release overrides require a compatible, published official Orca release independently of default companion-SDK CI. No verified public release currently meets that gate.
+- Default CI builds the pinned host source instead of downloading a private full desktop ZIP. It checks canonical declaration/runtime generation with `--check`, runs the official CLI build, and verifies `out/package.json.commit` against the full pinned commit before using the CLI. No hand-written SDK substitutes are used.
+- Plugin `v*` tags and manual public-release overrides require a compatible, published official Orca release independently of the default source-built SDK. A companion-fork build cannot satisfy that gate. No verified public release currently meets it.
 
 ### Verification and limits
 
