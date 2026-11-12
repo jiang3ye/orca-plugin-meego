@@ -18,6 +18,9 @@ This is an independent community integration, not an official Orca or Feishu Pro
 
 ### Changed
 
+- Explain work item → code directory → Agent in the detail view, with an explicit workspace picker, project/branch/location/path preview, saved-link state and replacement confirmation.
+- Recheck the original account, source and connection generation inside queued association commits and immediately before Agent delivery.
+- Validate a fixed selected workspace for association and new Agent sessions; an unavailable ambient selection no longer blocks a known target. Existing-terminal drafts retain the active-workspace membership guard.
 - Use the upstream official project/host workspace creation API and its dedicated permission; persist ID-only and late receipts before inventory lookup, with explicit association recovery.
 - Replaced hand-written Orca SDK mirrors with generated official authoring types.
 - Separated workspace actions, item mutations, connection management and presentation responsibilities.
@@ -33,7 +36,7 @@ This is an independent community integration, not an official Orca or Feishu Pro
 
 ### Verification and limits
 
-The local verification baseline is 202 passing offline behavior tests and 11 check scenarios. Cloud results are recorded in repository [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions); a successful cloud check is evidenced by the complete SDK job logs for that commit and run. Native fixture evidence includes 20 settings PNGs and 36 core UI PNGs. The previously installed companion host preserves encrypted login, exposes its integration settings route, resolves canonical workspace identity and installed Agent choices, reads an existing test item, and reattaches original terminal sessions.
+The local verification baseline is 214 passing offline behavior tests and 11 check scenarios. Cloud results are recorded in repository [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions); a successful cloud check is evidenced by the complete SDK job logs for that commit and run. Native fixture evidence includes 20 settings PNGs, 36 core UI PNGs and 20 workspace-flow PNGs. The previously installed companion host preserves encrypted login, exposes its integration settings route, resolves canonical workspace identity and installed Agent choices, reads an existing test item, and reattaches original terminal sessions.
 
 Isolated native Git lifecycle acceptance covers approval, disable/enable, upgrade, actual rollback, uninstall, fresh reinstall and development unload. Connection removal tests cover failed cleanup and late authorization without touching a live account.
 

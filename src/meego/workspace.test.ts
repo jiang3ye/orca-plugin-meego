@@ -87,7 +87,7 @@ test('resolves the host identity among same-named workspaces across hosts and fo
 test('rejects invalid focused identities without falling back to matching workspace labels', async () => {
   const focused = { workspaceId: 'identity:missing', branch: 'main', displayName: 'main', terminals: [] }
   const { state, orca } = identityHost(focused, WORKSPACES.slice(0, 1))
-  const deliver = () => deliverToAgent(orca, 'workspace-a', DETAIL, 'claude', { terminalId: null })
+  const deliver = () => requireWorkspace(orca)
   // A missing identity must not become the only same-named legacy row.
   await assert.rejects(deliver, /无法核对当前工作区标识/)
   state.context = { ...focused, workspaceId: 'folder:wrong-kind' }
@@ -163,6 +163,7 @@ test('fits draft and launch prompts inside Orca limits and strips raw draft cont
     'workspace.list': { workspaces: WORKSPACES.slice(0, 1), truncated: false },
     'agents.list': { agents: [draftAgent] },
     'terminal.sendText': { accepted: true },
+    'agents.available': { agents: [{ id: 'codex', label: 'Codex' }] },
     'agent.launch': { terminalId: 'new-agent-terminal' }
   } })
   const worker = await mountWorker({ default(orca: OrcaWorkerApi) {
@@ -188,6 +189,7 @@ test('fits draft and launch prompts inside Orca limits and strips raw draft cont
     'workspace.readContext': { branch: 'main', displayName: 'main', terminals: [] },
     'workspace.list': { workspaces: WORKSPACES.slice(0, 1), truncated: false },
     'agents.list': { agents: [] },
+    'agents.available': { agents: [{ id: 'codex', label: 'Codex' }] },
     'agent.launch': { terminalId: 'new-agent-terminal' }
   } })
   const launchWorker = await mountWorker({ default(orca: OrcaWorkerApi) {

@@ -13,8 +13,8 @@ The required platform surface includes canonical workspace IDs, scoped `agents.a
 | Layer | Modules | Responsibility |
 | --- | --- | --- |
 | Worker entry | `src/worker.ts` | Connection lifecycle, read queries, create/comment handlers and registration |
-| Workspace actions | `src/worker-workspace-actions.ts`, `src/meego/workspace.ts` | Canonical identity, associations, host Agent discovery and explicit handoff |
-| Durable creation | `src/meego/workspace-create.ts` | Per-item journal, idempotent creation and uncertain-result recovery |
+| Workspace actions | `src/worker-workspace-actions.ts`, `src/meego/workspace-inventory.ts`, `src/meego/workspace.ts` | Explicit inventory target selection, canonical identity, associations, host Agent discovery and handoff |
+| Durable creation | `src/meego/workspace-create.ts` | Per-item journal, no-replay creation and uncertain-result recovery |
 | Item mutations | `src/worker-item-edits.ts`, `src/meego/work-item-edit*.ts`, `src/meego/work-item-nodes*.ts` | Account/source/version checks, metadata, roles, states and nodes |
 | Connection | `src/meego/oauth.ts`, `src/meego/connection.ts`, clients | OAuth, encrypted credentials, region/account scope and provider adaptation |
 | Sidebar | `src/panel.tsx`, `src/panel-*.tsx` | Browsing, editing, drafts and action-local choices |
@@ -41,7 +41,7 @@ Tests fake HTTP and host boundaries and perform no live Feishu writes. Fixtures 
 
 Add a behavior regression at the layer that owns the change. Prefer hardcoded expected payloads for identity, account/source boundaries and mutation outcomes. Avoid tests for colors, copy, private state or helper call counts. Settings tests must remain connection-only and must not query work items or workspaces.
 
-The locally verified baseline is 185 passing behavior tests and 11 check scenarios. Presentation evidence contains 20 settings PNGs and 36 core UI PNGs. These fixture renders are not full rendered GUI acceptance. The mandated Electron skill is unavailable in the current environment, so that gap remains explicit.
+The locally verified baseline is 214 passing behavior tests and 11 check scenarios. Presentation evidence contains 20 settings PNGs, 36 core UI PNGs and 20 workspace-flow PNGs. These fixture renders are not full rendered GUI acceptance. The mandated Electron skill is unavailable in the current environment, so that gap remains explicit.
 
 ## CI SDK and release checks
 
@@ -62,7 +62,7 @@ Generated authoring declarations and runtime resources must come from the same c
 
 Plugin `v*` tags and a manual public-release override require a compatible, published official Orca release. That gate is separate from the default source-built SDK and cannot be satisfied by a companion-fork build. There is currently no verified public release satisfying it. See the [release guide](releasing.md#github-检查) for the publication boundary.
 
-These statements describe the workflow configuration. Cloud results are recorded in repository [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions); cite the complete SDK job logs for the corresponding commit and run when reporting a successful cloud check. The recorded 185 tests and 11 scenarios above remain the local verification baseline.
+These statements describe the workflow configuration. Cloud results are recorded in repository [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions); cite the complete SDK job logs for the corresponding commit and run when reporting a successful cloud check. The recorded 214 tests and 11 scenarios above remain the local verification baseline.
 
 ## Local development
 
@@ -74,7 +74,7 @@ Agent selection belongs to the handoff action. New sessions require an explicit 
 
 ## Acceptance and local records
 
-Installed-host checks have confirmed persistent encrypted login, native integration navigation, connection rendering, stable workspace identity, a four-entry installed Agent catalog, read-only access to an existing test item, and original PTY/incarnation reattachment. Earlier authorized business checks and isolated Agent delivery are segmented evidence; a new Agent has not yet been retested through the current installed build's full flow.
+Installed-host checks have confirmed persistent encrypted login, native integration navigation, connection rendering, stable workspace identity, the target host’s installed and enabled Agent catalog, read-only access to an existing test item, and original PTY/incarnation reattachment. Earlier authorized business checks and isolated Agent delivery are segmented evidence; a new Agent has not yet been retested through the current installed build's full flow.
 
 Live business writes require an explicitly bounded scope and a durable record before submission. Ordinary tests and contributor checks must not use a live account. Keep rollback information and acceptance logs local; do not publish account identifiers, tenant labels, real item links or terminal identities.
 

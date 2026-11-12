@@ -33,7 +33,8 @@ export function handoffBusy(): boolean {
   return read(sendBusyAtom)
 }
 
-export function cancelHandoff(): void {
+export function cancelHandoff(origin?: Handoff['origin']): void {
+  if (origin && read(handoffAtom)?.origin !== origin) return
   choicesRequest += 1
   set(handoffAtom, null)
   set(choicesAtom, null)
@@ -43,6 +44,7 @@ export function cancelHandoff(): void {
 }
 
 function terminalAgents(context: WorkspaceContextInfo) {
+  if (context.isActive === false) return []
   return context.agents.filter((agent) => agent.terminalId)
 }
 
@@ -79,18 +81,19 @@ async function loadChoices(handoff: Handoff, onError?: (error: unknown) => Promi
   }
 }
 
-export function HandoffView({ origin, context, report, onError }: {
+export function HandoffView({ origin, context, report, onError, disabled = false }: {
   origin: Handoff['origin']
   context: WorkspaceContextInfo | null
   report: Report
   onError: (error: unknown) => Promise<void>
   defaultAgent?: string
+  disabled?: boolean
 }) {
   const handoff = read(handoffAtom)
   if (handoff?.origin !== origin || handoff.workspaceId !== context?.workspaceId) return null
   const agents = terminalAgents(context)
   const terminalId = read(terminalAtom)
-  const busy = handoffBusy() || connectionChanging()
+  const busy = disabled || handoffBusy() || connectionChanging()
   const hasAgents = agents.length > 0
   const launching = !hasAgents || terminalId === NEW_AGENT
   const choices = read(choicesAtom)
@@ -102,12 +105,14 @@ export function HandoffView({ origin, context, report, onError }: {
       <Stack gap="sm">
         <Row justify="between" align="center" gap="xs" wrap>
           <Heading level={3}>交接工作项</Heading>
-          <Badge tone="neutral">{context.displayName ?? '当前工作区'}</Badge>
+          <Badge tone="neutral">{context.displayName ?? '所选工作区'}</Badge>
         </Row>
         <Text size="xs" muted>{`#${handoff.item.id} · ${handoff.name}`}</Text>
         <Text size="sm" muted>{launching
-          ? `在当前工作区启动 ${choice?.label ?? '所选 Agent'} 并发送工作项。启动前需安装对应 CLI。`
+          ? `在「${context.displayName ?? '所选工作区'}」启动 ${choice?.label ?? '所选 Agent'} 并发送工作项。启动前需安装对应 CLI。`
           : '标题、链接、状态和描述会填入所选终端，核对后提交。'}</Text>
+        {context.path ? <Text size="xs" muted>{context.path}</Text> : null}
+        {context.isActive === false ? <Text size="xs" muted>此工作区尚未打开。这里可启动新 Agent；要向已有终端写入草稿，先打开工作区。</Text> : null}
         {handoff.description !== '' ? <Text size="sm">{handoff.description.length > 200 ? `${handoff.description.slice(0, 200)}…` : handoff.description}</Text> : null}
         {hasAgents ? (
           <Select label="目标 Agent" value={terminalId} placeholder="选择接收工作项的 Agent" disabled={busy}
@@ -164,7 +169,7 @@ async function sendHandoff(handoff: Handoff, terminalId: string | null, report: 
       workspaceId: handoff.workspaceId,
       terminalId,
       ...(terminalId === null && agent ? { agent } : {}),
-      ...(handoff.origin === 'workspace' ? { linked: true } : {}),
+      ...(handoff.origin === 'workspace' || handoff.expectedLinkedAt !== undefined ? { linked: true } : {}),
       ...(handoff.expectedUserKey ? { expectedUserKey: handoff.expectedUserKey } : {}),
       ...(handoff.expectedLinkedAt === undefined ? {} : { expectedLinkedAt: handoff.expectedLinkedAt })
     }, { timeoutMs: HANDOFF_TIMEOUT_MS })

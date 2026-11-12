@@ -1,7 +1,7 @@
 import type { OrcaWorkerApi } from 'orca/worker'
 import type { AuthorizationStatus, MeegoSpace, MeegoStatus, WorkItemSource } from '../protocol'
 import { MeegoClient } from './client'
-import { DEFAULT_BASE_URL, DEFAULT_WEB_URL_TEMPLATE, loadMeegoConfig, missingConfigItems, SECRET_KEYS, SETTING_KEYS, type MeegoConfig } from './config'
+import { DEFAULT_BASE_URL, DEFAULT_WEB_URL_TEMPLATE, loadMeegoConfig, missingConfigItems, readMeegoSettingsScope, SECRET_KEYS, SETTING_KEYS, type MeegoConfig } from './config'
 import { currentFetch } from './fetch-provider'
 import { MeegoMcpClient } from './mcp-client'
 import { MeegoOAuth, oauthOrigin } from './oauth'
@@ -28,7 +28,12 @@ export class RequestError extends Error {
   }
 }
 
-export type ProjectClient = { config: MeegoConfig; client: MeegoClient | MeegoMcpClient }
+export type ProjectClient = {
+  config: MeegoConfig
+  client: MeegoClient | MeegoMcpClient
+  assertCurrent(settings?: Record<string, unknown>): void
+}
+export type ProjectScopeGuard = { run<T>(effect: () => Promise<T>): Promise<T> }
 
 export class MeegoConnection {
   readonly oauth: MeegoOAuth
@@ -218,7 +223,7 @@ export class MeegoConnection {
       const space = key === account.space?.key ? account.space : this.spaces.get(key)
       const project = { ...config, baseUrl, projectKey: key, userKey: account.user.key, spaceSlug: space?.slug, spaceName: space?.name, webUrlTemplate: '' }
       const scope = JSON.stringify(['oauth', baseUrl, sessionId, key])
-      return { config: project, client: this.client(scope, () => this.mcp(project, sessionId)) }
+      return this.bindProject(project, this.client(scope, () => this.mcp(project, sessionId)), generation, config)
     }
     if (await this.orca.storage.get(ACCOUNT_KEY) !== null) {
       throw new RequestError('consent_required', '飞书项目授权已断开，请重新连接。')
@@ -237,6 +242,30 @@ export class MeegoConnection {
     return this.legacy(config)
   }
 
+  guardProject(project: ProjectClient): ProjectScopeGuard {
+    const source = { baseUrl: project.config.baseUrl, projectKey: project.config.projectKey }
+    const userKey = project.config.userKey
+    return { run: async (effect) => {
+      project.assertCurrent()
+      const current = await this.project(source, userKey)
+      project.assertCurrent()
+      if (current.client !== project.client) throw this.sessionChanged()
+      project.assertCurrent(await this.orca.settings.get())
+      return effect()
+    } }
+  }
+
+  private bindProject(config: MeegoConfig, client: ProjectClient['client'], generation: number, nativeConfig = config): ProjectClient {
+    const nativeScope = { baseUrl: nativeConfig.baseUrl, projectKey: nativeConfig.projectKey, userKey: nativeConfig.userKey }
+    return { config, client, assertCurrent: (settings) => {
+      this.assertGeneration(generation)
+      if (settings) {
+        const current = readMeegoSettingsScope(settings)
+        if (current.baseUrl !== nativeScope.baseUrl || current.projectKey !== nativeScope.projectKey || current.userKey !== nativeScope.userKey) throw this.sessionChanged()
+      }
+    } }
+  }
+
   private legacy(config: MeegoConfig, source?: WorkItemSource): ProjectClient {
     const missing = missingConfigItems(config)
     if (missing.length > 0) throw new RequestError('not_configured', `请先连接飞书项目，或在高级连接中补全 ${missing.map((item) => item.label).join('、')}。`)
@@ -244,7 +273,7 @@ export class MeegoConnection {
       throw this.sourceMismatch()
     }
     const scope = JSON.stringify([this.generation, 'legacy', config.baseUrl, config.projectKey, config.userKey, config.pluginId, config.pluginSecret])
-    return { config, client: this.client(scope, () => new MeegoClient({ config, fetchImpl: this.fetchForConnection() })) }
+    return this.bindProject(config, this.client(scope, () => new MeegoClient({ config, fetchImpl: this.fetchForConnection() })), this.generation)
   }
 
   private client(scope: string, create: () => MeegoClient | MeegoMcpClient) {

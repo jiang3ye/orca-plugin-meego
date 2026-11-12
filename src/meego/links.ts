@@ -1,7 +1,7 @@
 // Workspace (worktree) <-> work item links, kept in the plugin's own storage.
 import type { OrcaWorkerApi } from 'orca/worker'
 import type { WorkspaceLink } from '../protocol'
-import { RequestError } from './connection'
+import { RequestError, type ProjectScopeGuard } from './connection'
 import { storageJson } from './storage-json'
 
 const LINKS_KEY = 'meego.workspaceLinks'
@@ -23,12 +23,17 @@ export async function getWorkspaceLink(orca: OrcaWorkerApi, workspaceId: string)
 /** Orca storage updates are per key. Serialize read/modify/write for the shared link map. */
 function updateLinks(
   orca: OrcaWorkerApi,
-  update: (map: LinkMap) => LinkMap
+  update: (map: LinkMap) => LinkMap,
+  guard?: ProjectScopeGuard
 ): Promise<void> {
   const next = (pending.get(orca) ?? Promise.resolve()).then(async () => {
     const previous = await readMap(orca)
     const map = update(previous)
-    if (map !== previous) await orca.storage.set(LINKS_KEY, storageJson(map))
+    if (map !== previous) {
+      const commit = () => orca.storage.set(LINKS_KEY, storageJson(map))
+      if (guard) await guard.run(commit)
+      else await commit()
+    }
   })
   pending.set(orca, next.catch(() => {}))
   return next
@@ -39,7 +44,8 @@ export function setWorkspaceLink(
   workspaceId: string,
   link: WorkspaceLink,
   expectedLinkedAt?: number | null,
-  strictEmpty = false
+  strictEmpty = false,
+  guard?: ProjectScopeGuard
 ): Promise<void> {
   return updateLinks(orca, (map) => {
     const previous = map[workspaceId]
@@ -48,17 +54,17 @@ export function setWorkspaceLink(
     )
     assertLinkRevision(hidden ? null : previous, expectedLinkedAt)
     return { ...map, [workspaceId]: { ...link, linkedAt: Math.max(link.linkedAt, (previous?.linkedAt ?? 0) + 1) } }
-  })
+  }, guard)
 }
 
-export function clearWorkspaceLink(orca: OrcaWorkerApi, workspaceId: string, expectedLinkedAt?: number | null): Promise<void> {
+export function clearWorkspaceLink(orca: OrcaWorkerApi, workspaceId: string, expectedLinkedAt?: number | null, guard?: ProjectScopeGuard): Promise<void> {
   return updateLinks(orca, (map) => {
     assertLinkRevision(map[workspaceId], expectedLinkedAt)
     if (!Object.hasOwn(map, workspaceId)) return map
     const next = { ...map }
     delete next[workspaceId]
     return next
-  })
+  }, guard)
 }
 
 export function assertLinkRevision(link: WorkspaceLink | null | undefined, expectedLinkedAt?: number | null): void {

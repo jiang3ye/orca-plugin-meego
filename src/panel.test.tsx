@@ -86,12 +86,14 @@ const CONTEXT_LINKED: WorkspaceContextInfo = {
   branchChanged: true,
   agents: []
 }
+const WORKSPACE = { id: 'ws-1', kind: 'worktree' as const, name: 'login-ws', project: 'Demo', path: '/code/demo', branch: 'feat/login', hostId: 'local' }
 
 function baseRequests(overrides: Record<string, (input: never) => unknown>): Record<string, (input: never) => unknown> {
   return {
     'meego.listTypes': () => ({ types: TYPES }),
     'meego.listWorkItems': () => ({ items: ITEMS, total: ITEMS.length, page: 1, hasMore: false, fromCache: false }),
     'meego.workspaceContext': () => CONTEXT_NO_WORKSPACE,
+    'meego.workspaceOptions': () => ({ workspaces: [WORKSPACE], truncated: false, activeWorkspaceId: null }),
     'meego.agentChoices': () => ({ agents: [{ id: 'claude', label: 'Claude Code' }], defaultAgent: 'claude' }),
     'meego.createForm': () => ({ form: { templates: [{ id: 'standard', name: '标准模板' }], fields: [], unsupportedRequired: [] } }),
     ...overrides
@@ -174,15 +176,17 @@ test('keeps the setup error visible when the connection test fails', async () =>
 })
 
 test('opens a detail from a row and hands the item to the agent', async () => {
+  let linked = false
   const host = mockHost({
     requests: baseRequests({
       'meego.status': () => STATUS_CONFIGURED,
       'meego.getWorkItem': () => ({ item: DETAIL }),
       'meego.workspaceContext': () => ({
         ...CONTEXT_LINKED,
-        link: null,
+        link: linked ? LINK : null,
         agents: [{ terminalId: 'terminal-1', agent: 'claude', title: 'Claude', state: 'working' }]
       }),
+      'meego.linkWorkspace': () => { linked = true; return { ok: true } },
       'meego.sendToAgent': (input: { workspaceId: string; terminalId: string; expectedUserKey?: string }) => {
         assert.equal(input.workspaceId, 'ws-1')
         assert.equal(input.terminalId, 'terminal-1')
@@ -197,9 +201,9 @@ test('opens a detail from a row and hands the item to the agent', async () => {
     await view.settled()
     await view.activateRow({ label: '工作项列表' }, '6801')
     await view.settled()
-    assert.notEqual(view.find({ text: '关联工作区' }), null)
     assert.notEqual(view.find({ text: '#6801 实现登录' }), null)
-
+    await view.select({ label: '选择代码目录' }, 'ws-1')
+    await view.press({ text: '关联此工作区' })
     await view.press({ text: '交给 Agent' })
     await view.press({ text: '写入 Agent 输入框' })
     await view.settled()
@@ -232,49 +236,33 @@ test('handoff from the workspace card explicitly requests a new agent', async ()
   }
 })
 
-test('workspace recovery explains unresolved context and enables guarded actions after a valid refresh', async () => {
-  let context: WorkspaceContextInfo = { ...CONTEXT_NO_WORKSPACE, displayName: 'main', branch: 'main', workspaceResolution: 'ambiguous' }
-  const linked: string[] = []
+test('selects an explicit code directory while ambient focus is unavailable and retains it after workspace changes', async () => {
+  const linked: unknown[] = []
+  let link: WorkspaceLink | null = null
   const host = mockHost({ requests: baseRequests({
     'meego.status': () => STATUS_CONFIGURED,
     'meego.getWorkItem': () => ({ item: DETAIL }),
-    'meego.workspaceContext': () => context,
-    'meego.linkWorkspace': (input: { workspaceId: string }) => {
-      linked.push(input.workspaceId)
-      context = { ...context, link: LINK }
-      return { ok: true }
-    }
+    'meego.workspaceContext': (input: { workspaceId: string } | undefined) => input
+      ? { ...CONTEXT_LINKED, link, unavailableReason: '当前窗口未选择工作区', isActive: false }
+      : { ...CONTEXT_NO_WORKSPACE, workspaceResolution: 'ambiguous' },
+    'meego.linkWorkspace': (input: unknown) => { linked.push(input); link = LINK; return { ok: true } }
   }) })
   const view = await mount(panel, { host, persisted: { plugin: { 'meego.viewMode': 'table' } } })
   try {
     await panel.initialLoad
-    assert.notEqual(view.find({ text: '重新识别工作区' }), null)
-    assert.notEqual(view.find({ text: '当前宿主无法区分同名同分支工作区。请更新 Orca 后重新识别工作区。' }), null)
     await view.activateRow({ label: '工作项列表' }, '6801')
-    await assert.rejects(() => view.press({ text: '关联工作区' }), /disabled/)
-    await assert.rejects(() => view.press({ text: '交给 Agent' }), /disabled/)
-    context = { ...context, workspaceResolution: 'truncated' }
-    await view.press({ text: '重新识别工作区' })
-    assert.notEqual(view.find({ text: 'Orca 返回的工作区列表不完整，暂时无法核对当前工作区。请等待列表加载后重新识别。' }), null)
-    await assert.rejects(() => view.press({ text: '关联工作区' }), /disabled/)
-    context = { ...context, workspaceResolution: 'unavailable' }
-    await view.press({ text: '重新识别工作区' })
-    assert.notEqual(view.find({ text: 'Orca 未提供可核对的当前工作区标识。请重新选择工作区；旧版宿主请更新后重新识别。' }), null)
-    context = CONTEXT_NO_WORKSPACE
-    await view.press({ text: '重新识别工作区' })
-    assert.notEqual(view.find({ text: '请先在 Orca 中选择工作区，再重新识别，即可关联工作项或交接给 Agent。' }), null)
-    context = { ...CONTEXT_LINKED, workspaceId: 'identity:remote-main', link: null, workspaceResolution: 'resolved' }
-    await view.press({ text: '重新识别工作区' })
     assert.equal(view.find({ text: '重新识别工作区' }), null)
-    await view.press({ text: '关联工作区' })
-    assert.deepEqual(linked, ['identity:remote-main'])
+    await view.select({ label: '选择代码目录' }, 'ws-1')
+    await view.press({ text: '关联此工作区' })
+    assert.deepEqual(linked, [{ workItemId: 6801, typeKey: 'story', name: '实现登录', status: '开发中', url: DETAIL.url,
+      expectedUserKey: 'dev_user', expectedLinkedAt: null, workspaceId: 'ws-1' }])
+    await view.emit('workspace.changed', { context: null })
+    assert.equal(view.valueOf({ label: '选择代码目录' }), 'ws-1')
     await view.press({ text: '交给 Agent' })
-    assert.notEqual(view.find({ text: '启动 Agent 并发送' }), null)
+    assert.notEqual(view.find({ label: '启动的 Agent' }), null)
     assert.deepEqual(view.errors, [])
     assert.deepEqual(view.refusals, [])
-  } finally {
-    await view.unmount()
-  }
+  } finally { await view.unmount() }
 })
 
 test('a failed workspace context request retains its cause and can be retried in place', async () => {
@@ -307,6 +295,7 @@ test('opens a legacy numeric link when the detail returns the same ID as text', 
     requests: baseRequests({
       'meego.status': () => STATUS_CONFIGURED,
       'meego.workspaceContext': () => CONTEXT_LINKED,
+      'meego.workspaceOptions': () => ({ workspaces: [{ ...WORKSPACE, linkedToItem: true }], activeWorkspaceId: 'ws-1', truncated: false }),
       'meego.openWorkItemLink': (input: unknown) => {
         assert.deepEqual(input, { url: LINK.url, expectedUserKey: STATUS_CONFIGURED.userKey })
         return { item: { ...DETAIL, id: '6801' } }
@@ -320,7 +309,7 @@ test('opens a legacy numeric link when the detail returns the same ID as text', 
     assert.notEqual(view.find({ text: '解除关联' }), null)
     assert.notEqual(view.find({ text: '关联时使用分支 main。' }), null)
     await view.press({ label: '查看关联工作项' })
-    assert.notEqual(view.find({ text: '已关联' }), null)
+    assert.notEqual(view.find({ text: '已关联此工作项' }), null)
     assert.deepEqual(view.errors, [])
     assert.deepEqual(view.refusals, [])
   } finally {
@@ -462,8 +451,8 @@ test('opens a pasted work-item link and binds the resolved source to the focused
     await view.type({ label: '工作项链接' }, DETAIL.url, { submit: true })
     await view.settled()
     assert.notEqual(view.find({ text: '#6801 实现登录' }), null)
-    await view.press({ text: '关联工作区' })
-    assert.notEqual(view.find({ text: '已关联到当前工作区' }), null)
+    await view.select({ label: '选择代码目录' }, 'ws-1')
+    await view.press({ text: '关联此工作区' })
     assert.deepEqual(view.errors, [])
   } finally {
     await view.unmount()
@@ -572,8 +561,9 @@ test('keeps adjacent 64-bit IDs distinct through keyboard search, binding, comme
     await view.press({ label: '返回列表' })
     assert.notEqual(view.find({ text: `共 1 项 · 搜索「#${id}」` }), null)
     await view.activateRow(table, id)
-    await view.press({ text: '关联工作区' })
-    assert.notEqual(view.find({ text: '已关联' }), null)
+    await view.select({ label: '选择代码目录' }, 'ws-1')
+    await view.press({ text: '关联此工作区' })
+    assert.notEqual(view.find({ text: '已关联此工作项' }), null)
     await view.press({ text: '查看评论' })
     await view.type({ label: '评论内容' }, '复核通过')
     await view.press({ text: '发布评论' })

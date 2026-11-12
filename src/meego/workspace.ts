@@ -1,8 +1,9 @@
 import type { OrcaWorkerApi } from 'orca/worker'
 import type { SendToAgentOutput, WorkItemDetail } from '../protocol'
-import { RequestError } from './connection'
+import { RequestError, type ProjectScopeGuard } from './connection'
 import { assertLinkRevision, getWorkspaceLink } from './links'
 import { buildWorkItemPrompt, limitAgentHandoffText } from './prompt'
+import { requireListedWorkspace } from './workspace-inventory'
 
 /** Verify the focused identity against the complete, cross-host workspace inventory. */
 export async function focusedWorkspace(orca: OrcaWorkerApi) {
@@ -40,16 +41,24 @@ export async function requireWorkspace(orca: OrcaWorkerApi, expected?: string) {
   return { ...context, workspaceId: context.workspaceId }
 }
 
+export async function requireWorkspaceTarget(orca: OrcaWorkerApi, workspaceId?: string) {
+  if (workspaceId === undefined) return requireWorkspace(orca)
+  const row = await requireListedWorkspace(orca, workspaceId)
+  return { workspaceId: row.id, displayName: row.name, branch: row.branch ?? '', terminals: [] }
+}
+
 export async function deliverToAgent(
   orca: OrcaWorkerApi,
   workspaceId: string,
   detail: WorkItemDetail,
   launchAgent: string,
-  target: { terminalId?: string | null; linkedAt?: number; signal?: AbortSignal } = {}
+  target: { terminalId?: string | null; linkedAt?: number; signal?: AbortSignal; guard?: ProjectScopeGuard } = {}
 ): Promise<SendToAgentOutput> {
   const { terminalId: requestedTerminal, linkedAt, signal } = target
+  const workspace = requestedTerminal === null
+    ? await requireWorkspaceTarget(orca, workspaceId)
+    : await requireWorkspace(orca, workspaceId)
   const agents = requestedTerminal === null ? [] : (await orca.host.call('agents.list')).agents
-  const workspace = await requireWorkspace(orca, workspaceId)
   const terminalIds = new Set(workspace.terminals.map(({ id }) => id))
   // Orca reports an idle CLI's completed turn as done. These terminals receive drafts.
   const terminalAgents = agents.filter((agent) => agent.terminalId !== null && terminalIds.has(agent.terminalId))
@@ -70,10 +79,25 @@ export async function deliverToAgent(
     // A running Agent can exit to its shell after the host snapshot. Keep this draft
     // on one terminal line so embedded line breaks cannot submit commands.
     const draft = limitAgentHandoffText(prompt.replace(/\t/g, ' ').split(/[\n\u2028\u2029]+/).filter(Boolean).join(' · '))
-    const result = await orca.host.call('terminal.sendText', { terminalId: agent.terminalId, text: draft, enter: false }, options)
+    const terminalId = agent.terminalId
+    const send = () => {
+      if (signal?.aborted) throw new RequestError('cancelled', '交接请求已取消。')
+      return orca.host.call('terminal.sendText', { terminalId, text: draft, enter: false }, options)
+    }
+    const result = target.guard ? await target.guard.run(send) : await send()
     if (!result.accepted) throw new RequestError('agent_unavailable', '无法确认草稿是否写入，请先检查目标终端再重试。')
     return { sent: true, detail: `Orca 已接收写入 ${agent.title ?? agent.agent ?? 'Agent'} 终端的请求。请在终端核对后提交。` }
   }
-  await orca.host.call('agent.launch', { workspaceId, agent: launchAgent, prompt: limitAgentHandoffText(prompt) }, options)
+  const { agents: available } = await orca.host.call('agents.available', { workspaceId })
+  if (!available.some((entry) => entry.id === launchAgent)) throw new RequestError('agent_unavailable', '所选 Agent 已不可用，请刷新选项后重新选择。')
+  await requireListedWorkspace(orca, workspaceId)
+  if (linkedAt !== undefined) assertLinkRevision(await getWorkspaceLink(orca, workspaceId), linkedAt)
+  if (signal?.aborted) throw new RequestError('cancelled', '交接请求已取消。')
+  const launch = () => {
+    if (signal?.aborted) throw new RequestError('cancelled', '交接请求已取消。')
+    return orca.host.call('agent.launch', { workspaceId, agent: launchAgent, prompt: limitAgentHandoffText(prompt) }, options)
+  }
+  if (target.guard) await target.guard.run(launch)
+  else await launch()
   return { sent: true, detail: `Orca 已打开 ${launchAgent} 终端并接收投递请求。请在终端确认 Agent 启动和工作项送达。` }
 }

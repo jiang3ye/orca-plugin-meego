@@ -43,18 +43,25 @@ function normalizeBaseUrl(url: string): string {
   return url.replace(/\/+$/, '')
 }
 
+export function readMeegoSettingsScope(settings: Record<string, unknown>) {
+  return {
+    baseUrl: normalizeBaseUrl(asString(settings[SETTING_KEYS.baseUrl], DEFAULT_BASE_URL)),
+    projectKey: asString(settings[SETTING_KEYS.projectKey]),
+    userKey: asString(settings[SETTING_KEYS.userKey])
+  }
+}
+
 export async function loadMeegoConfig(orca: OrcaWorkerApi): Promise<MeegoConfig> {
   const settings = await orca.settings.get()
-  const baseUrl = normalizeBaseUrl(asString(settings[SETTING_KEYS.baseUrl], DEFAULT_BASE_URL))
+  const scope = readMeegoSettingsScope(settings)
+  const { baseUrl } = scope
   const saved = await orca.secrets.get(SECRET_KEYS.credentials)
   const { pluginId, pluginSecret } = saved === null && baseUrl === DEFAULT_BASE_URL ? {
     pluginId: (await orca.secrets.get(SECRET_KEYS.pluginId)) ?? '',
     pluginSecret: (await orca.secrets.get(SECRET_KEYS.pluginSecret)) ?? ''
   } : readCredentials(saved, baseUrl)
   return {
-    baseUrl,
-    projectKey: asString(settings[SETTING_KEYS.projectKey]),
-    userKey: asString(settings[SETTING_KEYS.userKey]),
+    ...scope,
     pluginId: pluginId.trim(),
     pluginSecret: pluginSecret.trim(),
     agentCommand: asString(settings[SETTING_KEYS.agentCommand], DEFAULT_AGENT_COMMAND),

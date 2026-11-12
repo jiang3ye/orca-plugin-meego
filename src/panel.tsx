@@ -42,11 +42,11 @@ import { ConnectionPanel, connectionChanging, disposeConnection, loadSpaces, res
 import { HandoffView, beginHandoff, cancelHandoff, handoffBusy, type ItemRef } from './panel-handoff'
 import { CreateForm, createBusy, createOpen, resetCreate, toggleCreate } from './panel-create'
 import { CommentsPanel, commentBusy, resetComments } from './panel-comments'
-import { sameWorkItemId } from './meego/work-item-id'
 import { WorkItemResults, ResultSortControl, resetResultNavigation, workItemTone } from './panel-results'
 import { EditPanel, editBusy, resetEdit } from './panel-edit'
 import { NodesPanel, nodesBusy, resetNodes } from './panel-nodes'
-import { WorkspaceCreationPanel, beginWorkspaceCreation, resetWorkspaceCreation, workspaceCreationBusy } from './panel-workspace-create'
+import { resetWorkspaceCreation, workspaceCreationBusy } from './panel-workspace-create'
+import { WorkspaceLinkPanel, refreshWorkspaceLink, setWorkspaceLinkItem, workspaceLinkBusy } from './panel-workspace-link'
 
 // -- atoms --------------------------------------------------------------------
 
@@ -82,7 +82,6 @@ const contextErrorAtom = atom<string | null>(null)
 const linkInputOpenAtom = atom(false)
 const linkDraftAtom = atom('')
 const workspaceMessageAtom = atom<{ text: string; tone: Tone } | null>(null)
-const replaceLinkAtom = atom<{ workspaceId: string; link: WorkspaceLink } | null>(null)
 const workspaceActionBusyAtom = atom(false)
 
 // -- helpers ------------------------------------------------------------------
@@ -176,8 +175,7 @@ async function refreshContext(): Promise<void> {
     const context = await plugin.request('meego.workspaceContext')
     if (request !== contextRequest) return
     if (old?.workspaceId !== context.workspaceId || old?.branch !== context.branch) {
-      cancelHandoff()
-      set(replaceLinkAtom, null)
+      cancelHandoff('workspace')
       set(workspaceMessageAtom, null)
     }
     set(contextAtom, context)
@@ -185,8 +183,7 @@ async function refreshContext(): Promise<void> {
     if (request === contextRequest) {
       set(contextAtom, null)
       set(contextErrorAtom, errorMessageOf(error))
-      cancelHandoff()
-      set(replaceLinkAtom, null)
+      cancelHandoff('workspace')
     }
   } finally {
     if (request === contextRequest) set(contextLoadingAtom, false)
@@ -203,8 +200,8 @@ function clearDetail(): void {
   resetEdit()
   resetNodes()
   resetWorkspaceCreation()
+  setWorkspaceLinkItem()
   cancelHandoff()
-  set(replaceLinkAtom, null)
 }
 
 function resetScope(): void {
@@ -289,6 +286,7 @@ async function openDetail(target: DetailTarget): Promise<void> {
     set(detailAtom, item)
     resetEdit(item, target.expectedUserKey ?? read(statusAtom)?.userKey)
     resetNodes(item, target.expectedUserKey ?? read(statusAtom)?.userKey)
+    setWorkspaceLinkItem(item, target.expectedUserKey ?? read(statusAtom)?.userKey)
     if ('url' in target) set(linkDraftAtom, '')
   } catch (error) {
     if (request !== detailRequest) return
@@ -323,16 +321,17 @@ function reportWorkspace(text: string, tone: Tone): void {
 export let initialLoad: Promise<void> = Promise.resolve()
 
 export function setup(ctx: PanelContext): void {
-  ctx.subscriptions.push(plugin.on('meego.linkChanged', () => void refreshContext()))
+  ctx.subscriptions.push(plugin.on('meego.linkChanged', () => { void refreshContext(); void refreshWorkspaceLink(refreshAfterAuthError) }))
   ctx.subscriptions.push(plugin.on('meego.connectionChanged', () => {
     resetConnectionInputs()
     void refreshAll()
   }))
-  ctx.subscriptions.push(on('workspace.changed', () => void refreshContext()))
-  ctx.subscriptions.push(on('agent.status.changed', () => void refreshContext()))
+  ctx.subscriptions.push(on('workspace.changed', () => { void refreshContext(); void refreshWorkspaceLink(refreshAfterAuthError) }))
+  ctx.subscriptions.push(on('agent.status.changed', () => { void refreshContext(); void refreshWorkspaceLink(refreshAfterAuthError) }))
   initialLoad = refreshAll()
   ctx.subscriptions.push({ dispose: () => {
     disposeConnection()
+    setWorkspaceLinkItem()
     statusOptionsRequest += 1
     statusRequest += 1
     listRequest += 1
@@ -360,6 +359,7 @@ function WorkspaceContextNotice() {
     <Callout tone={error ? 'danger' : 'warning'} title="无法识别当前工作区">
       <Stack gap="xs">
         <Text size="sm">{reason}</Text>
+        <Text size="xs" muted>也可先打开工作项，在「开发工作区」选择处理任务的代码目录。</Text>
         <Row gap="xs" wrap>
           <Button size="sm" variant="outline" disabled={loading || connectionChanging()} onPress={() => refreshContext()}>重新识别工作区</Button>
           {loading ? <Spinner label="正在识别工作区…" /> : null}
@@ -413,10 +413,6 @@ function LinkCard() {
 
 function linkRef(link: WorkspaceLink): ItemRef {
   return { id: link.workItemId, typeKey: link.typeKey, ...(link.source ? { source: link.source } : {}) }
-}
-
-function detailRef(detail: WorkItemDetail): ItemRef {
-  return { id: detail.id, typeKey: detail.typeKey, ...(detail.source ? { source: detail.source } : {}) }
 }
 
 function browsingRef(item: WorkItemSummary, status: MeegoStatus | null): ItemRef {
@@ -598,7 +594,7 @@ function DetailView() {
   return (
     <Stack gap="md">
       <Row gap="sm" align="start">
-        <IconButton size="sm" icon="collapse" label="返回列表" tooltip="返回列表" onPress={() => clearDetail()} />
+        <IconButton size="sm" icon="collapse" label="返回列表" tooltip="返回列表" onPress={async () => { clearDetail(); await refreshContext() }} />
         <Box grow shrink gap="xs">
           {detail !== null ? <Text size="xs" muted>{`#${detail.id}`}</Text> : 'url' in selected ? null : <Text size="xs" muted>{`#${selected.id}`}</Text>}
           <Heading level={2}>{detail?.name ?? ('url' in selected ? '打开工作项' : '工作项详情')}</Heading>
@@ -622,15 +618,7 @@ function DetailBody(props: { detail: WorkItemDetail }) {
   const detail = props.detail
   const account = expectedAccount(read(statusAtom))
   const types = read(typesAtom) ?? []
-  const context = read(contextAtom)
-  const actionBusy = read(workspaceActionBusyAtom) || read(contextLoadingAtom) || handoffBusy() || editBusy() || nodesBusy() || workspaceCreationBusy() || connectionChanging()
-  const replacement = read(replaceLinkAtom)
-  const link = context?.link
   const source = detail.source
-  const linked = link && sameWorkItemId(link.workItemId, detail.id) && link.typeKey === detail.typeKey && (
-    (detail.url !== '' && link.url === detail.url) ||
-    (source && link.source?.baseUrl === source.baseUrl && link.source.projectKey === source.projectKey)
-  )
   return (
     <Stack gap="md">
       <Row gap="xs" wrap>
@@ -638,33 +626,8 @@ function DetailBody(props: { detail: WorkItemDetail }) {
         <Badge tone={workItemTone(detail.statusState)}>{detail.status || '无状态'}</Badge>
         {detail.updatedAt !== null ? <RelativeTime at={detail.updatedAt} muted /> : null}
       </Row>
-      <Row gap="xs" wrap>
-        <Button size="sm" variant="solid" tone="accent" icon="agent" disabled={actionBusy || context?.workspaceId == null}
-          onPress={() => context && beginHandoff({
-            item: detailRef(detail), name: detail.name, description: detail.description, origin: 'detail', ...account
-          }, context)}>交给 Agent</Button>
-        <Button size="sm" variant="outline" disabled={actionBusy || context?.workspaceId == null || Boolean(linked)}
-          onPress={() => prepareLink(detail, context, account.expectedUserKey)}>{linked ? '已关联' : '关联工作区'}</Button>
-        <IconButton size="sm" icon="open-external" label="在浏览器打开" disabled={!detail.url} onPress={() => openUrl(detail.url, reportDetail)} />
-      </Row>
-      <Row justify="start">
-        <Button size="sm" variant="ghost" icon="branch" disabled={actionBusy}
-          onPress={() => beginWorkspaceCreation({ ...detailRef(detail), ...account })}>新建关联工作区</Button>
-      </Row>
-      <WorkspaceCreationPanel onError={refreshAfterAuthError} onCreated={() => refreshContext()} />
-      <WorkspaceContextNotice />
-      {replacement !== null && replacement.workspaceId === context?.workspaceId ? (
-        <Callout tone="warning" title="替换工作区关联">
-          <Stack gap="xs">
-            <Text size="sm">{`将 #${replacement.link.workItemId} ${replacement.link.name} 换为 #${detail.id} ${detail.name}？`}</Text>
-            <Row gap="xs" wrap>
-              <Button size="sm" disabled={actionBusy} onPress={() => linkCurrent(detail, replacement.workspaceId, replacement.link.linkedAt, account.expectedUserKey)}>确认替换</Button>
-              <Button size="sm" variant="ghost" disabled={actionBusy} onPress={() => set(replaceLinkAtom, null)}>取消替换</Button>
-            </Row>
-          </Stack>
-        </Callout>
-      ) : null}
-      <HandoffView origin="detail" context={context} defaultAgent={read(statusAtom)?.defaultAgent} report={reportDetail} onError={refreshAfterAuthError} />
+      <Row justify="end"><Button size="sm" variant="ghost" icon="open-external" disabled={!detail.url} onPress={() => openUrl(detail.url, reportDetail)}>在飞书项目中打开</Button></Row>
+      <WorkspaceLinkPanel disabled={editBusy() || nodesBusy()} onError={refreshAfterAuthError} />
       <KeyValue
         label="字段"
         items={[
@@ -683,6 +646,7 @@ function DetailBody(props: { detail: WorkItemDetail }) {
       <EditPanel currentUserKey={account.expectedUserKey} onError={refreshAfterAuthError} onSaved={async (item, outcome) => {
         if (detail !== read(detailAtom)) return
         set(detailAtom, item)
+        setWorkspaceLinkItem(item, account.expectedUserKey)
         resetNodes(item, account.expectedUserKey)
         reportDetail(outcome === 'adopted' ? '已采用最新详情' : '修改已确认', 'success')
         await refreshContext()
@@ -691,6 +655,7 @@ function DetailBody(props: { detail: WorkItemDetail }) {
       {detail.workflowMode !== 'state' ? <NodesPanel currentUserKey={account.expectedUserKey} onError={refreshAfterAuthError} onSaved={async (item, outcome) => {
         if (detail !== read(detailAtom)) return
         set(detailAtom, item)
+        setWorkspaceLinkItem(item, account.expectedUserKey)
         resetEdit(item, account.expectedUserKey)
         reportDetail(outcome === 'adopted' ? '已采用最新流程' : '节点操作已确认', 'success')
         await refreshContext()
@@ -701,51 +666,11 @@ function DetailBody(props: { detail: WorkItemDetail }) {
   )
 }
 
-function prepareLink(detail: WorkItemDetail, context: WorkspaceContextInfo | null, expectedUserKey?: string): Promise<void> | undefined {
-  if (context?.workspaceId == null || context.workspaceId !== read(contextAtom)?.workspaceId) return
-  if (context.link) {
-    set(replaceLinkAtom, { workspaceId: context.workspaceId, link: context.link })
-  } else {
-    return linkCurrent(detail, context.workspaceId, null, expectedUserKey)
-  }
-}
-
-async function linkCurrent(detail: WorkItemDetail, workspaceId: string, expectedLinkedAt: number | null, expectedUserKey?: string): Promise<void> {
-  if (connectionChanging() || read(workspaceActionBusyAtom) || read(contextAtom)?.workspaceId !== workspaceId || detail !== read(detailAtom)) return
-  if ((read(contextAtom)?.link?.linkedAt ?? null) !== expectedLinkedAt) {
-    set(replaceLinkAtom, null)
-    reportDetail('关联已变化，请查看当前工作区后重试。', 'warning')
-    return
-  }
-  set(workspaceActionBusyAtom, true)
-  try {
-    await plugin.request('meego.linkWorkspace', {
-      workItemId: detail.id,
-      typeKey: detail.typeKey,
-      name: detail.name,
-      status: detail.status,
-      ...(detail.url ? { url: detail.url } : {}),
-      ...(detail.source ? { source: detail.source } : {}),
-      ...(expectedUserKey ? { expectedUserKey } : {}),
-      expectedLinkedAt,
-      workspaceId
-    })
-    await refreshContext()
-    set(replaceLinkAtom, null)
-    if (detail === read(detailAtom) && workspaceId === read(contextAtom)?.workspaceId) reportDetail('已关联到当前工作区', 'success')
-  } catch (error) {
-    if (detail === read(detailAtom)) reportDetail(errorMessageOf(error), 'danger')
-    await refreshAfterAuthError(error)
-  } finally {
-    set(workspaceActionBusyAtom, false)
-  }
-}
-
 export default function Panel() {
   const status = read(statusAtom)
   const error = read(statusErrorAtom)
   const selected = read(selectedAtom)
-  const writeBusy = read(workspaceActionBusyAtom) || handoffBusy() || createBusy() || commentBusy() || editBusy() || nodesBusy() || workspaceCreationBusy()
+  const writeBusy = workspaceLinkBusy() || read(workspaceActionBusyAtom) || handoffBusy() || createBusy() || commentBusy() || editBusy() || nodesBusy() || workspaceCreationBusy()
   const choosingSpace = status?.connection?.state === 'choose_space'
   const openingLink = read(linkInputOpenAtom)
   return (

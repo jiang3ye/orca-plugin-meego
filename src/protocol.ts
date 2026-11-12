@@ -172,10 +172,33 @@ export interface WorkspaceContextInfo {
   workspaceResolution?: 'resolved' | 'ambiguous' | 'truncated' | 'unavailable'
   displayName: string | null
   branch: string | null
+  project?: string | null
+  path?: string
+  hostId?: string | null
+  isActive?: boolean
+  unavailableReason?: string
   link: WorkspaceLink | null
   /** The link was made on another branch. */
   branchChanged: boolean
   agents: { terminalId: string | null; title: string | null; agent: string | null; state: string }[]
+}
+
+export interface WorkspaceOption {
+  id: string
+  kind: 'worktree' | 'folder'
+  name: string
+  project: string | null
+  path: string
+  branch: string | null
+  hostId: string | null
+  linkedToItem?: boolean
+}
+
+export interface WorkspaceOptions {
+  workspaces: WorkspaceOption[]
+  truncated: boolean
+  activeWorkspaceId: string | null
+  message?: string
 }
 
 export interface WorkspaceLink {
@@ -294,8 +317,10 @@ declare module 'orca' {
     'meego.createForm': { input: { typeKey: string; source?: WorkItemSource; expectedUserKey?: string }; output: { form: CreateWorkItemForm } }
     /** Creates a work item with the fields supported by its connection. */
     'meego.createWorkItem': { input: CreateWorkItemInput; output: { item: WorkItemSummary } | { state: 'confirmed' } | UnverifiedWrite }
-    /** The focused workspace, its work item link and running agents. */
-    'meego.workspaceContext': { output: WorkspaceContextInfo }
+    /** A selected workspace; omission reads Orca's focused selection. */
+    'meego.workspaceContext': { input: { workspaceId: string } | undefined; output: WorkspaceContextInfo }
+    'meego.workspaceOptions': { input: WorkItemReference | undefined; output: WorkspaceOptions }
+    'meego.openWorkspace': { input: { workspaceId: string }; output: { opened: true } }
     'meego.agentChoices': { input: { workspaceId: string }; output: { agents: { id: string; label: string }[]; defaultAgent?: string } }
     'meego.openSettings': { output: { opened: boolean } }
     'meego.workspaceCreationPlan': { input: WorkItemReference; output: WorkspaceCreationPlan }
@@ -304,9 +329,9 @@ declare module 'orca' {
     'meego.recoverCreatedWorkspace': { input: WorkspaceCreationOperation & { workspaceId: string }; output: WorkspaceCreationPlan }
     'meego.confirmWorkspaceNotCreated': { input: WorkspaceCreationOperation; output: WorkspaceCreationPlan }
     'meego.openCreatedWorkspace': { input: WorkspaceCreationOperation; output: { opened: true } }
-    /** Links the focused workspace to a work item. */
+    /** Links an explicitly selected workspace, or the focused one when omitted. */
     'meego.linkWorkspace': { input: { workItemId: WorkItemId; typeKey: string; name: string; status?: string; source?: WorkItemSource; url?: string; workspaceId?: string; expectedUserKey?: string; expectedLinkedAt?: number | null }; output: { ok: boolean } }
-    /** Removes the focused workspace's link. */
+    /** Removes the selected workspace's link, with focused selection as a legacy default. */
     'meego.unlinkWorkspace': { input: { workspaceId?: string; expectedLinkedAt?: number | null } | undefined; output: { ok: boolean } }
     /** A terminal ID selects an agent. Null explicitly requests a new one. Omission uses automatic selection. */
     'meego.sendToAgent': { input: { id: WorkItemId; typeKey: string; source?: WorkItemSource; workspaceId?: string; terminalId?: string | null; agent?: string; linked?: boolean; expectedUserKey?: string; expectedLinkedAt?: number | null }; output: SendToAgentOutput }

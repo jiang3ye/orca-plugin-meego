@@ -2,7 +2,7 @@
 
 Meego for Orca separates presentation, provider access and native workspace effects. It currently implements Feishu Project / Meegle only. There are no Jira or Linear adapters.
 
-This architecture requires the experimental companion Orca host at commit `9df199ef`, which includes the platform changes. Public Orca 1.4.256 and public main do not provide the complete required surface. See [development](development.md) and [releasing](releasing.md).
+This architecture requires the companion host pinned in [`.github/orca-sdk.json`](../.github/orca-sdk.json). Checked public Orca v1.4.257 lacks required settings/navigation and Agent discovery fields. The development engine floor is not a public compatibility guarantee. See [development](development.md) and [releasing](releasing.md).
 
 ## Runtime boundaries
 
@@ -32,7 +32,7 @@ The trusted worker resolves the active connection, validates scope and invokes e
 | `meego/mcp-client.ts`, `meego/client.ts` | Personal MCP and enterprise OpenAPI adaptation |
 | `meego/work-item-edit*.ts` | Field capabilities, real status transitions and role-member operations |
 | `meego/work-item-nodes*.ts` | Explicit node inspection, requirements, revisions and node actions |
-| `meego/workspace.ts`, `meego/links.ts` | Canonical focus validation, saved associations and terminal delivery |
+| `meego/workspace-inventory.ts`, `meego/workspace.ts`, `meego/links.ts` | Explicit inventory validation, focused-context compatibility, saved associations and terminal delivery |
 | `meego/workspace-create.ts` | Durable creation plan, receipt, recovery and fixed-target association |
 | `panel-*.tsx`, `settings.tsx` | Native declarative controls, scoped drafts and late-response protection |
 
@@ -56,6 +56,10 @@ A project key and its browser slug are separate values. Canonical links are chec
 
 Workspace names and branches are labels, not addresses. Old hosts may use a globally unique label/branch fallback. Ambiguous or truncated inventories remain unresolved and expose a recovery explanation. A supplied but invalid canonical ID cannot use that fallback.
 
+The detail view selects a development workspace explicitly from the host inventory. Project, branch, host location and path are visible before linking; ambient focus is a suggestion, not authority to replace a selected target. Association and a new Agent session retain that fixed ID even if the person switches windows. Existing-terminal drafts retain the host's active-workspace membership boundary. A cached, unavailable or ambiguous workspace is not an executable target, and inventory errors remain visible with a retry action.
+
+Association commits and Agent effects retain the originally resolved account, source and connection generation. The worker rechecks this scope inside the serialized link commit and immediately before sending a draft or launching an Agent; a late request cannot adopt a new ambient account or space.
+
 ## Capabilities and writes
 
 The UI loads provider metadata before exposing an edit. A status action sends the provider's real transition ID. A role edit requires explicit selection of a configured role and sends only that role's membership changes. `current_status_operator` is a computed field and remains read-only.
@@ -75,11 +79,11 @@ ready → creating → created → linked
              ↘ uncertain
 ```
 
-A ready plan fixes the source workspace, host and branch. The worker persists `creating` before dispatching the native create request and persists the receipt before association. The host request carries an idempotency key. Refreshing an unsubmitted ready plan invalidates its previous plan ID.
+A ready plan fixes the source workspace, host and branch. The worker persists `creating` before dispatching the native create request and persists the receipt before association. The native request uses the official project/host creation API; the plugin journal prevents replay rather than inventing an unsupported host idempotency parameter. Refreshing an unsubmitted ready plan invalidates its previous plan ID.
 
 A receipt identifies the new workspace directly. Association does not follow later focus changes and will not overwrite another saved work-item link. Creation stays in the background; opening the resulting workspace is a separate explicit request.
 
-If creation is uncertain, the journal blocks duplicate creation until the original request settles and the user checks the result. An existing receipt can be recovered or association retried without another create. A confirmed-not-created action issues a fresh plan only after the original operation has settled.
+If creation is uncertain, the journal blocks duplicate creation until the original request settles and the user checks the result. An existing receipt can be recovered or association retried without another create. A confirmed-not-created action issues a fresh plan only after the original operation has settled. An ID-only or late success receipt is saved before inventory lookup; an inventory failure leaves a created result for explicit association retry.
 
 ## Native settings and handoff
 
