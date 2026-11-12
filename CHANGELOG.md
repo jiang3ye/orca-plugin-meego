@@ -2,7 +2,7 @@
 
 ## 0.1.0-dev.1 — draft companion-host preview
 
-This preview requires the custom Orca companion host at commit `9df199ef`, which includes the integration platform changes. Public Orca 1.4.256 and public main do not yet include the required APIs. The manifest engine floor is not a public-release compatibility guarantee.
+This preview requires the custom Orca companion platform introduced at commit `9df199ef`. The CI SDK uses a descendant with the generated SDK/runtime synchronization fix; its exact commit, ZIP SHA256 and CLI version are pinned in [`.github/orca-sdk.json`](.github/orca-sdk.json). Public Orca 1.4.256 and public main do not yet include the required APIs. The manifest engine floor is not a public-release compatibility guarantee.
 
 ### Added
 
@@ -21,9 +21,15 @@ This preview requires the custom Orca companion host at commit `9df199ef`, which
 - Commands without an existing Agent now require a choice in the panel instead of launching a hidden default.
 - Public documentation and regression fixtures use sanitized business examples.
 
+### CI configuration
+
+- Every push and pull request is configured for three-OS source checks and a complete `npm run check` on macOS 15 ARM64, including SDK generation, manifest validation, strict types, offline tests, panel scenarios and source inventory.
+- Default CI uses a SHA256-pinned private companion SDK prerelease named `ci-host-<commit12>`, with the host commit and CLI version recorded in the pin file. It is not a plugin version release or an official Orca `latest` build.
+- Plugin `v*` tags and manual public-release overrides require a compatible, published official Orca release independently of default companion-SDK CI. No verified public release currently meets that gate.
+
 ### Verification and limits
 
-Verification records show 185 offline behavior tests and 11 check scenarios pass. Native fixture evidence includes 20 settings PNGs and 36 core UI PNGs. The installed companion host preserves encrypted login, exposes its integration settings route, resolves canonical workspace identity and installed Agent choices, reads an existing test item, and reattaches original terminal sessions.
+The local verification baseline is 185 passing offline behavior tests and 11 check scenarios. Cloud results are recorded in repository [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions); a successful cloud check is evidenced by the complete SDK job logs for that commit and run. Native fixture evidence includes 20 settings PNGs and 36 core UI PNGs. The installed companion host preserves encrypted login, exposes its integration settings route, resolves canonical workspace identity and installed Agent choices, reads an existing test item, and reattaches original terminal sessions.
 
 Earlier authorized business checks and isolated Codex delivery are segmented evidence. A new Agent has not yet been retested through the current installed build's complete flow. Full rendered GUI acceptance remains open because the mandated Electron skill is unavailable. International and enterprise connections have not completed live business acceptance.
 

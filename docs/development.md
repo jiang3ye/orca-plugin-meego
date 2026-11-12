@@ -4,7 +4,7 @@
 
 This is an experimental companion-host integration. The checked public Orca 1.4.256 and public main do not include all required APIs. A numerically compatible version is insufficient.
 
-Development and local verification use the custom host at commit `9df199ef`, which includes the complete companion platform changes and has not entered a public host release. Use that build's CLI throughout type generation, tests, checks and installation. The manifest engine floor describes platform grammar, not support in public Orca releases.
+The companion platform features originate at host commit `9df199ef`. The CI SDK uses a descendant containing the generated SDK/runtime synchronization fix. Its exact host commit, CLI version and ZIP SHA256 are pinned in [`.github/orca-sdk.json`](../.github/orca-sdk.json); that file is the source of truth, not the feature-baseline short hash. Use the pinned build's CLI throughout type generation, tests and checks. The manifest engine floor describes platform grammar, not support in public Orca releases.
 
 The required platform surface includes canonical workspace IDs, scoped `agents.available`, plugin-scoped `settings.open`, settings-only component panels, background workspace creation and readiness-aware Agent delivery. See [architecture](architecture.md) for their boundaries and [releasing](releasing.md) for compatibility checks before packaging.
 
@@ -41,7 +41,19 @@ Tests fake HTTP and host boundaries and perform no live Feishu writes. Fixtures 
 
 Add a behavior regression at the layer that owns the change. Prefer hardcoded expected payloads for identity, account/source boundaries and mutation outcomes. Avoid tests for colors, copy, private state or helper call counts. Settings tests must remain connection-only and must not query work items or workspaces.
 
-The current verified baseline is 185 passing behavior tests and 11 check scenarios. Presentation evidence contains 20 settings PNGs and 36 core UI PNGs. These fixture renders are not full rendered GUI acceptance. The mandated Electron skill is unavailable in the current environment, so that gap remains explicit.
+The locally verified baseline is 185 passing behavior tests and 11 check scenarios. Presentation evidence contains 20 settings PNGs and 36 core UI PNGs. These fixture renders are not full rendered GUI acceptance. The mandated Electron skill is unavailable in the current environment, so that gap remains explicit.
+
+## CI SDK and release checks
+
+Every push and pull request is configured to run source inventory checks on Linux, macOS and Windows, plus the complete `npm run check` on a macOS 15 ARM64 runner. The SDK job generates types, validates the manifest, typechecks, runs the offline behavior tests and all panel scenarios, and checks the source inventory. Source-only success cannot stand in for this job.
+
+Default CI downloads the private internal companion SDK prerelease named `ci-host-<commit12>`. The pin file binds its exact host commit, ZIP SHA256 and CLI version. CI must verify those values and use the CLI bundled in that same artifact; it must not select `latest`, substitute a public build with a similar version, or silently fall back to source-only checks when artifact access fails. The private asset is an SDK dependency, not a plugin `v*` release or a public Orca release.
+
+Generated authoring declarations and runtime resources must come from the same host build. Fix SDK generation in the companion host before packaging an updated pin; do not mask drift with plugin-local Orca type declarations or mocks that widen the public API.
+
+Plugin `v*` tags and a manual public-release override additionally require a compatible, published official Orca release. That gate is separate from default companion-SDK CI and must not fall back to the private artifact. There is currently no verified public release satisfying it. See the [release guide](releasing.md#github-检查) for the publication boundary.
+
+These statements describe the workflow configuration. Cloud results are recorded in repository [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions); cite the complete SDK job logs for the corresponding commit and run when reporting a successful cloud check. The recorded 185 tests and 11 scenarios above remain the local verification baseline.
 
 ## Local development
 

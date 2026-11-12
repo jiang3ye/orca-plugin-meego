@@ -4,16 +4,18 @@
 
 ## 宿主前置条件
 
-配套宿主改动基线为 `9df199efbd6754adcd8944be801028b6634e8e87`，包括：
+配套宿主的功能改动基线为 `9df199efbd6754adcd8944be801028b6634e8e87`，包括：
 
 - `contributes.panels[].location: "settings"` 及原生集成设置页；
 - `settings.open`、`agents.available`；
 - `workspace.readContext.workspaceId`、工作区创建能力；
 - Agent 启动时序和提示投递修复。
 
+日常 CI 的配套 SDK 从这一基线的后续提交构建，并包含生成类型与运行时资源同步修复。精确宿主提交、CLI 版本、ZIP 资源与完整 SHA256 统一记录在 [`.github/orca-sdk.json`](../.github/orca-sdk.json)。不要把功能基线提交当成当前 SDK 固定版本，也不要手动猜测新版本号。
+
 公开版本的[面板严格 schema](https://github.com/stablyai/orca/blob/v1.4.256/src/shared/plugins/contributions/plugin-panel-contribution.ts)会在执行插件之前拒绝新的 `location` 字段。[公开 Host API](https://github.com/stablyai/orca/blob/v1.4.256/docs/reference/plugin-host-api.md)也没有这些扩展。manifest 的 `>=1.4.255` 是开发平台的字段版本下限，不能代替公开宿主兼容证明；不要猜测未来版本号。
 
-发布前先让配套宿主改动进入可获取的 Orca 版本，使用该版本的 CLI 重新生成 SDK、校验、类型检查并验收，再更新真正的公开最低版本。完整桌面验收还需按宿主要求使用 Electron 技能和隔离显示环境完成；原生组件截图与分段 API 验证不能代替完整 GUI 流程。
+公开发布前，配套宿主改动必须进入已发布、可获取的官方 Orca 版本。使用该版本的 CLI 重新生成 SDK、校验、类型检查并验收，再更新真正的公开最低版本。私有 CI SDK 可用于日常开发检查，不能替代这一公开兼容门槛。完整桌面验收还需按宿主要求使用 Electron 技能和隔离显示环境完成；原生组件截图与分段 API 验证不能代替完整 GUI 流程。
 
 ## 本地检查和干净快照
 
@@ -39,9 +41,30 @@ npm run release:prepare
 
 ## GitHub 检查
 
-仓库工作流默认只运行源码清单检查，并明确标注这不等于 SDK 或桌面验收。`workflow_dispatch` 可指定兼容的公开 Orca release 标签，下载对应架构的官方 macOS ZIP、核对 GitHub 发布资产 SHA256 和应用签名，再运行完整 `npm run check`。
+日常检查与公开发布使用不同的宿主来源：
 
-版本标签校验需要仓库变量 `ORCA_SDK_RELEASE` 指向已包含配套改动的公开宿主版本。当前没有可填的已验证公开版本；保持该项未配置，标签检查会明确失败。工作流不创建或发布 GitHub Release。
+| 触发与用途 | 宿主来源 | 检查范围 |
+| --- | --- | --- |
+| 每次 push / pull request 的默认 CI | 固定的私有配套 SDK | Linux、macOS、Windows 源码检查，以及 macOS 15 ARM64 的完整 `npm run check` |
+| 插件 `v*` 标签 / 手动公开版本覆盖 | 已发布且经验证兼容的官方 Orca release | 官方宿主兼容门槛、版本一致性及完整 SDK 检查；不能用私有构建代替 |
+
+### 默认配套 SDK
+
+CI 从私有内部 prerelease `ci-host-<commit12>` 获取配套宿主 ZIP。它是用于 SDK 检查的宿主资源，不是插件 `v*` 标签、插件发布资产或官方 Orca 的 `latest` 版本。下载来源和内容身份以 `.github/orca-sdk.json` 为准，必须绑定完整宿主提交、完整 ZIP SHA256 和准确 CLI 版本。
+
+工作流使用该 ZIP 内的 CLI 生成类型并执行测试，避免声明文件与运行时资源来自不同宿主。更新配套 SDK 时，先通过宿主官方生成流程同步这些资源，再从确切的新宿主提交打包；核对 ZIP、提交和 CLI 版本后一起更新固定记录。不能只换声明、追随可变的 `latest`，或使用名称相近的公开版替代。
+
+macOS 15 ARM64 的 SDK 检查在每次 push 和 pull request 执行完整 `npm run check`：SDK 类型生成、manifest 校验、严格类型检查、离线行为测试、全部面板场景和源码清单检查。当前本地基线为 185 项行为测试和 11 个场景。三系统源码检查仍独立保留，其通过结果不能替代 SDK 检查。
+
+私有资源访问或完整性校验失败应明确失败，不能退化为仅源码检查或跳过 SDK。私有资源下载权限由维护者配置，不能将凭据放入固定记录或发布资产。这里描述的是 CI 配置范围；每次云端结果见仓库 [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions)。报告某次检查通过时，应以对应提交和运行的完整 SDK job 日志为依据，确认各阶段实际执行并通过；185 项测试和 11 个场景仅是本地验证基线。
+
+### 官方发布门槛
+
+插件 `v*` 标签和手动指定公开宿主版本时，必须选择已发布、可下载并验证包含全部所需 API 的官方 Orca release。该路线核对对应官方 ZIP 的 SHA256、应用身份和 CLI 版本，再执行完整检查；不回退到默认私有配套 SDK。
+
+当前没有符合条件的已验证官方公开版本。不要填写不兼容的公开 `v1.4.256`，也不要把 `ci-host-*` 内部 prerelease 当作官方版本来解除门槛。发布标签在缺少合格官方宿主时必须明确失败。日常配套 SDK 检查通过不代表插件已满足公开发布或完整桌面验收要求。
+
+工作流不创建或发布插件 GitHub Release。内部 CI 宿主资产由维护者单独准备；插件正式发布仍按以下步骤执行。
 
 ## 正式发布
 

@@ -3,12 +3,12 @@ name: Check source and Orca SDK
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: ['**']
     tags: ['v*']
   workflow_dispatch:
     inputs:
       orca_sdk_release:
-        description: 'Published Orca tag containing the companion host APIs; leave blank for source checks only'
+        description: 'Optional compatible public Orca tag; blank uses the pinned companion SDK'
         required: false
         type: string
 
@@ -41,18 +41,14 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run check:source
-      - name: Describe verification scope
-        shell: bash
-        run: echo 'Source inventory passed. SDK and desktop verification require the compatible companion host described in docs/releasing.md.' >> "$GITHUB_STEP_SUMMARY"
 
   sdk:
     name: Orca SDK verification
     needs: source
-    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.orca_sdk_release != '')
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 20
     env:
-      ORCA_RELEASE: ${{ inputs.orca_sdk_release || vars.ORCA_SDK_RELEASE }}
+      ORCA_RELEASE: ${{ inputs.orca_sdk_release || (startsWith(github.ref, 'refs/tags/v') && vars.ORCA_SDK_RELEASE) || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -61,33 +57,52 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-      - name: Require an explicitly verified host release
-        shell: bash
-        run: |
-          if [[ ! "$ORCA_RELEASE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo 'A compatible public Orca release is required. See docs/releasing.md; current public v1.4.256 does not contain the companion APIs.' >&2
-            exit 1
-          fi
-      - name: Install the official host CLI without opening the desktop
+      - name: Install the pinned SDK without opening the desktop
+        id: host
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          case "$(uname -m)" in
-            arm64) artifact="Orca-${ORCA_RELEASE#v}-arm64-mac.zip" ;;
-            x86_64) artifact="Orca-${ORCA_RELEASE#v}-mac.zip" ;;
-            *) echo 'Unsupported macOS runner architecture' >&2; exit 1 ;;
-          esac
-          metadata=$(gh api "repos/stablyai/orca/releases/tags/$ORCA_RELEASE")
-          digest=$(jq -er --arg name "$artifact" '.assets[] | select(.name == $name) | .digest | select(test("^sha256:[a-f0-9]{64}$")) | sub("^sha256:"; "")' <<< "$metadata")
+          if [[ "$(uname -m)" != arm64 ]]; then
+            echo 'The pinned companion SDK requires a macOS ARM64 runner.' >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_REF_TYPE" == tag || -n "$ORCA_RELEASE" ]]; then
+            if [[ ! "$ORCA_RELEASE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+              echo 'Release tags require a compatible public ORCA_SDK_RELEASE; see docs/releasing.md.' >&2
+              exit 1
+            fi
+            sdk_source=public
+            sdk_repo=stablyai/orca
+            sdk_tag="$ORCA_RELEASE"
+            artifact="Orca-${ORCA_RELEASE#v}-arm64-mac.zip"
+            metadata=$(gh api "repos/$sdk_repo/releases/tags/$sdk_tag")
+            digest=$(jq -er --arg name "$artifact" '.assets[] | select(.name == $name) | .digest | select(test("^sha256:[a-f0-9]{64}$")) | sub("^sha256:"; "")' <<< "$metadata")
+            expected_version="${ORCA_RELEASE#v}"
+          else
+            sdk_source=companion
+            sdk_repo=$(jq -er '.repository' .github/orca-sdk.json)
+            sdk_tag=$(jq -er '.releaseTag' .github/orca-sdk.json)
+            artifact=$(jq -er '.asset' .github/orca-sdk.json)
+            digest=$(jq -er '.sha256 | select(test("^[a-f0-9]{64}$"))' .github/orca-sdk.json)
+            expected_version=$(jq -er '.version' .github/orca-sdk.json)
+          fi
           sdk_dir="$RUNNER_TEMP/meego-orca-sdk"
           mkdir -p "$sdk_dir"
-          gh release download "$ORCA_RELEASE" --repo stablyai/orca --pattern "$artifact" --dir "$sdk_dir"
+          gh release download "$sdk_tag" --repo "$sdk_repo" --pattern "$artifact" --dir "$sdk_dir"
           printf '%s  %s\n' "$digest" "$sdk_dir/$artifact" | shasum -a 256 -c -
           ditto -x -k "$sdk_dir/$artifact" "$sdk_dir/unpacked"
           codesign --verify --deep --strict "$sdk_dir/unpacked/Orca.app"
+          actual_version=$("$sdk_dir/unpacked/Orca.app/Contents/Resources/bin/orca" --version)
+          if [[ "$actual_version" != "$expected_version" ]]; then
+            echo 'Downloaded SDK version does not match its pin.' >&2
+            exit 1
+          fi
           printf '%s\n' "$sdk_dir/unpacked/Orca.app/Contents/Resources/bin" >> "$GITHUB_PATH"
+          printf 'ORCA_CI_APP=%s\nORCA_CI_SDK_SOURCE=%s\n' "$sdk_dir/unpacked/Orca.app" "$sdk_source" >> "$GITHUB_ENV"
+      - name: Verify SDK identity and method contracts
+        run: node scripts/verify-ci-sdk.mjs
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Match a pushed tag to the manifest
         if: startsWith(github.ref, 'refs/tags/')

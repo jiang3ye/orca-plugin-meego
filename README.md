@@ -8,7 +8,7 @@
 
 核查的公开版 Orca 1.4.256 和公开主分支缺少本项目使用的部分平台能力，包括原生集成设置页、插件设置导航、可验证的工作区标识和按主机发现 Agent。不能仅依据版本号安装使用。
 
-当前验收使用包含完整配套平台改动的宿主提交 `9df199ef`。由该提交构建的应用已在本地安装并恢复正常运行；这一提交尚未进入公开宿主版本。安装版本号更高的公开版不代表包含这些改动。manifest 中的宿主版本下限是平台语法门槛，不是公开版兼容承诺。
+配套平台功能基线为宿主提交 `9df199ef`，已有本地安装和分段验收记录。日常 CI 的配套 SDK 使用包含生成类型与运行时资源同步修复的后续提交；精确宿主提交、CLI 版本和 ZIP SHA256 以 [`.github/orca-sdk.json`](.github/orca-sdk.json) 为准。这些改动尚未进入已验证的公开宿主版本。安装版本号更高的公开版不代表包含这些改动。manifest 中的宿主版本下限是平台语法门槛，不是公开版兼容承诺。
 
 开始前需准备包含配套改动的宿主和与其匹配的 CLI。开发与发布流程见[开发指南](docs/development.md)和[发布指南](docs/releasing.md)。
 
@@ -76,6 +76,10 @@ orca plugin inspect . --json
 ```
 
 `check` 会生成官方 SDK 类型，依次运行 manifest 校验、严格类型检查、离线测试、面板场景和源码清单检查。CLI 由兼容的 Orca 构建提供，不要安装同名 npm 包。测试与检查场景使用合成数据和离线 mock，不需要真实账号。
+
+每次 push 和 pull request 的 CI 配置同时包含三系统源码检查与 macOS 15 ARM64 的完整 SDK 检查。默认 SDK 来自私有内部 prerelease 的 `ci-host-<commit12>` 配套构建，按固定 ZIP SHA256、宿主提交和 CLI 版本校验，不使用 `latest`。该资源是 CI 依赖，不是插件版本发布或公开 Orca 兼容证明。
+
+插件 `v*` 标签及手动选择公开宿主版本的检查另有门槛：必须使用已发布、已验证包含所需 API 的官方 Orca release，不回退到私有配套 SDK。当前尚无符合条件的公开版本。每次云端结果见仓库 [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions)，以对应提交和运行的完整 SDK job 日志为依据；前述 185 项测试和 11 个场景是本地验证基线。详见[发布指南](docs/releasing.md#github-检查)。
 
 - [开发指南](docs/development.md)：模块职责、SDK 类型和验证流程。
 - [架构说明](docs/architecture.md)：请求边界、持久状态与写入保护。
