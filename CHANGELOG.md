@@ -18,6 +18,7 @@ This is an independent community integration, not an official Orca or Feishu Pro
 
 ### Changed
 
+- Use the upstream official project/host workspace creation API and its dedicated permission; persist ID-only and late receipts before inventory lookup, with explicit association recovery.
 - Replaced hand-written Orca SDK mirrors with generated official authoring types.
 - Separated workspace actions, item mutations, connection management and presentation responsibilities.
 - Added account/source/version and association checks, late-response protection, and explicit recovery for unverified outcomes.
@@ -32,7 +33,9 @@ This is an independent community integration, not an official Orca or Feishu Pro
 
 ### Verification and limits
 
-The local verification baseline is 185 passing offline behavior tests and 11 check scenarios. Cloud results are recorded in repository [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions); a successful cloud check is evidenced by the complete SDK job logs for that commit and run. Native fixture evidence includes 20 settings PNGs and 36 core UI PNGs. The installed companion host preserves encrypted login, exposes its integration settings route, resolves canonical workspace identity and installed Agent choices, reads an existing test item, and reattaches original terminal sessions.
+The local verification baseline is 202 passing offline behavior tests and 11 check scenarios. Cloud results are recorded in repository [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions); a successful cloud check is evidenced by the complete SDK job logs for that commit and run. Native fixture evidence includes 20 settings PNGs and 36 core UI PNGs. The previously installed companion host preserves encrypted login, exposes its integration settings route, resolves canonical workspace identity and installed Agent choices, reads an existing test item, and reattaches original terminal sessions.
+
+Isolated native Git lifecycle acceptance covers approval, disable/enable, upgrade, actual rollback, uninstall, fresh reinstall and development unload. Connection removal tests cover failed cleanup and late authorization without touching a live account.
 
 Earlier authorized business checks and isolated Codex delivery are segmented evidence. A new Agent has not yet been retested through the current installed build's complete flow. Full rendered GUI acceptance remains open because the mandated Electron skill is unavailable. International and enterprise connections have not completed live business acceptance.
 

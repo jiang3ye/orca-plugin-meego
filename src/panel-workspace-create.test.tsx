@@ -6,7 +6,7 @@ import { beginWorkspaceCreation, resetWorkspaceCreation, WorkspaceCreationPanel 
 const ref: WorkItemReference = { id: 123, typeKey: 'story', expectedUserKey: 'user-a', source: { baseUrl: 'https://project.feishu.cn', projectKey: 'space-a' } }
 const other: WorkItemReference = { ...ref, id: 456 }
 const source = { id: 'repo-a', name: 'main', project: 'Orca', path: '/repos/orca', branch: 'main', hostId: 'local' }
-const receipt: CreatedWorkspaceReceipt = { workspaceId: 'created-a', name: 'meego-123', path: '/worktrees/meego-123', branch: 'meego-123' }
+const receipt = { workspaceId: 'created-a', name: 'meego-123', path: '/worktrees/meego-123', branch: 'meego-123' } satisfies CreatedWorkspaceReceipt
 const ready: WorkspaceCreationPlan = { planId: 'plan-a', state: 'ready', name: 'meego-123', sources: [source], recoveryWorkspaces: [] }
 const linked: WorkspaceCreationPlan = { ...ready, state: 'linked', sources: [], receipt }
 

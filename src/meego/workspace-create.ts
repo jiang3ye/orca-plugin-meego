@@ -15,7 +15,6 @@ type Journal = {
   ref: WorkItemReference
   accountKey: string
   planId: string
-  requestId: string
   state: 'ready' | 'creating' | 'uncertain' | 'created' | 'linked'
   name: string
   sources: WorkspaceCreationSource[]
@@ -39,12 +38,16 @@ function sourceEqual(a: WorkItemSource | undefined, b: WorkItemSource | undefine
   return a?.baseUrl === b?.baseUrl && a?.projectKey === b?.projectKey
 }
 
-function receiptOf(value: unknown): CreatedWorkspaceReceipt | null {
+function receiptOf(value: unknown, name: string): CreatedWorkspaceReceipt | null {
   if (typeof value !== 'object' || value === null) return null
   const row = value as Record<string, unknown>
-  if (typeof row.workspaceId !== 'string' || !row.workspaceId || typeof row.name !== 'string' || !row.name ||
-    typeof row.path !== 'string' || !row.path || !(row.branch === null || typeof row.branch === 'string')) return null
-  return { workspaceId: row.workspaceId, name: row.name, path: row.path, branch: row.branch }
+  if (typeof row.workspaceId !== 'string' || !row.workspaceId ||
+    (row.name !== undefined && (typeof row.name !== 'string' || !row.name)) ||
+    (row.path !== undefined && (typeof row.path !== 'string' || !row.path)) ||
+    !(row.branch === undefined || row.branch === null || typeof row.branch === 'string')) return null
+  return { workspaceId: row.workspaceId, name: typeof row.name === 'string' ? row.name : name,
+    ...(typeof row.path === 'string' ? { path: row.path } : {}),
+    ...(row.branch === null || typeof row.branch === 'string' ? { branch: row.branch } : {}) }
 }
 
 function sourceOf(value: unknown): value is WorkspaceCreationSource {
@@ -53,11 +56,13 @@ function sourceOf(value: unknown): value is WorkspaceCreationSource {
   return typeof row.id === 'string' && row.id !== '' && typeof row.name === 'string' &&
     typeof row.path === 'string' && typeof row.branch === 'string' && row.branch !== '' &&
     (row.hostId === null || typeof row.hostId === 'string') &&
+    (row.projectId === undefined || (typeof row.projectId === 'string' && row.projectId !== '')) &&
     (row.project === undefined || row.project === null || typeof row.project === 'string')
 }
 
 function sameCreationSource(a: WorkspaceCreationSource, b: WorkspaceCreationSource): boolean {
-  return a.id === b.id && a.path === b.path && a.branch === b.branch && a.hostId === b.hostId
+  return a.id === b.id && a.path === b.path && a.branch === b.branch &&
+    (a.hostId ?? 'local') === (b.hostId ?? 'local') && a.projectId === b.projectId
 }
 
 function parseJournal(value: unknown, scope: string): Journal | null {
@@ -65,13 +70,13 @@ function parseJournal(value: unknown, scope: string): Journal | null {
   if (typeof value !== 'object' || Array.isArray(value)) throw new RequestError('creation_journal', '工作区创建记录无法读取，请先核对 Orca 工作区。')
   const journal = value as Journal
   if (journal.version !== 1 || journal.scope !== scope || typeof journal.accountKey !== 'string' ||
-    !/^[A-Za-z0-9_-]{1,128}$/.test(journal.planId) || !/^[A-Za-z0-9_-]{1,128}$/.test(journal.requestId) ||
+    !/^[A-Za-z0-9_-]{1,128}$/.test(journal.planId) ||
     !['ready', 'creating', 'uncertain', 'created', 'linked'].includes(journal.state) ||
     typeof journal.name !== 'string' || !Array.isArray(journal.sources) || !journal.sources.every(sourceOf) ||
-    ((journal.state === 'created' || journal.state === 'linked') && !receiptOf(journal.receipt))) {
+    ((journal.state === 'created' || journal.state === 'linked') && !receiptOf(journal.receipt, journal.name))) {
     throw new RequestError('creation_journal', '工作区创建记录不完整，请先核对 Orca 工作区。')
   }
-  return journal
+  return { ...journal, ...(journal.receipt ? { receipt: receiptOf(journal.receipt, journal.name)! } : {}) }
 }
 
 /** Registers worker-only operations; the resolver owns authentication and scope checks. */
@@ -116,17 +121,31 @@ export function registerWorkspaceCreation(orca: OrcaWorkerApi, options: {
   }
 
   async function listing() {
-    const result = await orca.host.call('workspace.list')
-    const worktrees = result.workspaces.filter((row) => row.kind === 'worktree' && row.branch && row.id && row.path)
-    const recoveryWorkspaces: WorkspaceCreationSource[] = worktrees.map((row) => ({
-      id: row.id, name: row.name, path: row.path, branch: row.branch!, hostId: row.hostId,
-      ...(row.project === undefined ? {} : { project: row.project })
-    }))
-    const sources = result.truncated || result.canCreateWorktree !== true ? [] : recoveryWorkspaces
-    const message = result.truncated ? 'Orca 工作区列表不完整，请减少工作区或更新宿主后重试。'
-      : result.canCreateWorktree !== true ? '当前宿主不支持创建 Git 工作区，请更新 Orca 后重试。'
+    const [result, projects] = await Promise.all([
+      orca.host.call('workspace.list'),
+      orca.host.has('project.list') ? orca.host.call('project.list') : Promise.resolve(null)
+    ])
+    const recoveryWorkspaces: WorkspaceCreationSource[] = result.workspaces.flatMap((row) => {
+      const hostId = row.hostId ?? 'local'
+      const matches = projects?.projects.filter((project) => project.id === row.projectId && project.hostId === hostId)
+      if (projects?.truncated || row.kind !== 'worktree' || !row.branch || !row.id || !row.path ||
+        !row.projectId || matches?.length !== 1 || matches[0].kind !== 'git') return []
+      return [{ id: row.id, name: row.name, path: row.path, branch: row.branch, hostId,
+        projectId: row.projectId, project: matches[0].name }]
+    })
+    const supported = orca.host.has('workspace.create') && projects !== null
+    const sources = result.truncated || projects?.truncated || !supported ? [] : recoveryWorkspaces
+    const message = result.truncated || projects?.truncated ? 'Orca 工作区或项目列表不完整，请减少工作区或更新宿主后重试。'
+      : !supported ? '当前宿主不支持创建 Git 工作区，请更新 Orca 后重试。'
         : sources.length === 0 ? '请先在 Orca 中打开有分支的 Git 工作区，再刷新创建计划。' : undefined
     return { sources, recoveryWorkspaces, message }
+  }
+
+  function sameProject(source: WorkspaceCreationSource | undefined, candidate: WorkspaceCreationSource, inventory: WorkspaceCreationSource[]): boolean {
+    if (!source || (source.hostId ?? 'local') !== (candidate.hostId ?? 'local')) return false
+    const projectId = source.projectId ?? inventory.find((row) => row.id === source.id && row.path === source.path &&
+      (row.hostId ?? 'local') === (source.hostId ?? 'local'))?.projectId
+    return Boolean(projectId && projectId === candidate.projectId)
   }
 
   async function present(journal: Journal): Promise<WorkspaceCreationPlan> {
@@ -134,8 +153,8 @@ export function registerWorkspaceCreation(orca: OrcaWorkerApi, options: {
     // A failed read must not erase an already-known creation result.
     if (journal.state === 'creating' || journal.state === 'uncertain') {
       try {
-        recoveryWorkspaces = (await listing()).recoveryWorkspaces.filter((row) =>
-          row.id !== journal.source?.id && (!journal.source || row.hostId === journal.source.hostId))
+        const inventory = (await listing()).recoveryWorkspaces
+        recoveryWorkspaces = inventory.filter((row) => row.id !== journal.source?.id && sameProject(journal.source, row, inventory))
       } catch { /* The user can refresh later. */ }
     }
     return {
@@ -154,7 +173,7 @@ export function registerWorkspaceCreation(orca: OrcaWorkerApi, options: {
     }
     const journal: Journal = {
       version: 1, scope: scopeOf(resolved), ref, accountKey: resolved.accountKey,
-      planId: randomUUID(), requestId: randomUUID(), state: 'ready',
+      planId: randomUUID(), state: 'ready',
       name: `meego-${resolved.item.id}`, sources, ...(message ? { message } : {})
     }
     await persist(key, journal)
@@ -180,15 +199,18 @@ export function registerWorkspaceCreation(orca: OrcaWorkerApi, options: {
   }
 
   async function link(key: string, journal: Journal): Promise<WorkspaceCreationPlan> {
-    const receipt = journal.receipt!
+    let receipt = journal.receipt!
     try {
       // Save the receipt before any attempt to associate it, including retry/recovery.
       await persist(key, { ...journal, state: 'created' })
-      const current = (await orca.host.call('workspace.list')).workspaces.find((row) => row.id === receipt.workspaceId)
-      if (!current || current.kind !== 'worktree' || current.path !== receipt.path ||
-        (journal.source && current.hostId !== journal.source.hostId)) {
+      const inventory = (await listing()).recoveryWorkspaces
+      const current = inventory.find((row) => row.id === receipt.workspaceId)
+      if (!current || (receipt.path !== undefined && current.path !== receipt.path) ||
+        current.path === journal.source?.path || !sameProject(journal.source, current, inventory)) {
         throw new RequestError('workspace_changed', '已创建的工作区已移除或路径变化，请在 Orca 中核对。')
       }
+      receipt = { workspaceId: current.id, name: current.name, path: current.path, branch: current.branch }
+      await persist(key, { ...journal, state: 'created', receipt })
       const existing = await getWorkspaceLink(orca, receipt.workspaceId)
       const { item, accountKey } = await revalidate(journal)
       const same = existing && String(existing.workItemId) === String(item.id) && existing.typeKey === item.typeKey &&
@@ -203,12 +225,12 @@ export function registerWorkspaceCreation(orca: OrcaWorkerApi, options: {
         }, null, true)
       }
       const { message: _message, ...saved } = journal
-      const linked: Journal = { ...saved, state: 'linked' }
+      const linked: Journal = { ...saved, state: 'linked', receipt }
       await persist(key, linked)
       orca.panels.post('meego.linkChanged', { workspaceId: receipt.workspaceId })
       return present(linked)
     } catch (error) {
-      const created: Journal = { ...journal, state: 'created', message: `工作区已创建，关联尚未完成。${error instanceof Error ? error.message : '请重试关联。'}` }
+      const created: Journal = { ...journal, state: 'created', receipt, message: `工作区已创建，关联尚未完成。${error instanceof Error ? error.message : '请重试关联。'}` }
       memory.set(key, created)
       try { await persist(key, created) } catch { /* The previous creating record still blocks duplicate creation. */ }
       return present(created)
@@ -242,7 +264,7 @@ export function registerWorkspaceCreation(orca: OrcaWorkerApi, options: {
       }
       const source = journal.sources.find((row) => row.id === input.sourceWorkspaceId)
       const live = (await listing()).sources.find((row) => row.id === input.sourceWorkspaceId)
-      if (!source || !live || !sameCreationSource(source, live)) {
+      if (!source || !live || !sameCreationSource(source, live) || !source.projectId) {
         throw new RequestError('workspace_changed', '来源工作区的仓库、主机或分支已变化，请刷新创建计划。')
       }
       await revalidate(journal)
@@ -251,24 +273,51 @@ export function registerWorkspaceCreation(orca: OrcaWorkerApi, options: {
       // No host write is dispatched unless this durable barrier succeeds.
       await persist(key, creating)
       let timer: ReturnType<typeof setTimeout> | undefined
-      let receipt: CreatedWorkspaceReceipt | null
+      let waiting = true
+      let received: CreatedWorkspaceReceipt | null = null
+      const rememberReceipt = async (receipt: CreatedWorkspaceReceipt) => {
+        const current = await read(key, scope)
+        if (!current || current.planId !== creating.planId || !['creating', 'uncertain'].includes(current.state)) return current
+        const created: Journal = { ...current, state: 'created', receipt, message: '工作区已创建，请核对后关联。' }
+        await persist(key, created)
+        return created
+      }
       try {
         signal.throwIfAborted()
-        const creation = orca.host.call('workspace.create', { sourceWorkspaceId: source.id, name, requestId: journal.requestId }, { signal })
+        const creation = orca.host.call('workspace.create', {
+          projectId: source.projectId, hostId: source.hostId ?? 'local', name,
+          baseBranch: source.branch, open: false
+        }, { signal }).then(async (raw) => {
+          const receipt = receiptOf(raw, name)
+          if (!receipt || receipt.workspaceId === source.id || receipt.path === source.path) throw new Error(UNCERTAIN)
+          received = receipt
+          if (!waiting) await serial(scope, () => rememberReceipt(receipt)).catch(() => {})
+          return receipt
+        })
         pendingCreates.set(key, creation)
         // Timing out stops this panel's wait, not the host effect. Keep its scope
         // blocked until the original call settles, without replaying late results.
         void creation.finally(() => {
           if (pendingCreates.get(key) === creation) pendingCreates.delete(key)
         }).catch(() => {})
-        const raw = await Promise.race([
+        const receipt = await Promise.race([
           creation,
           new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(UNCERTAIN)), CREATION_TIMEOUT_MS) })
         ])
-        signal.throwIfAborted()
-        receipt = receiptOf(raw)
-        if (!receipt || receipt.workspaceId === source.id || receipt.path === source.path) throw new Error(UNCERTAIN)
+        waiting = false
+        const created = await rememberReceipt(receipt)
+        if (!created) throw new Error(UNCERTAIN)
+        if (signal.aborted) return present(created)
+        return link(key, created)
       } catch {
+        waiting = false
+        const known = memory.get(key)
+        if (known?.planId === creating.planId && known.receipt) return present(known)
+        if (received) {
+          try { await rememberReceipt(received) } catch { /* Keep the known ID in memory if storage is unavailable. */ }
+          const known = memory.get(key)
+          if (known?.receipt) return present(known)
+        }
         const uncertain: Journal = { ...creating, state: 'uncertain' }
         memory.set(key, uncertain)
         try { await persist(key, uncertain) } catch { /* The creating barrier is already durable. */ }
@@ -276,7 +325,6 @@ export function registerWorkspaceCreation(orca: OrcaWorkerApi, options: {
       } finally {
         if (timer !== undefined) clearTimeout(timer)
       }
-      return link(key, { ...creating, state: 'created', receipt })
     })
   })
 
@@ -297,12 +345,13 @@ export function registerWorkspaceCreation(orca: OrcaWorkerApi, options: {
     return serial(scope, async (key) => {
       const journal = await requirePlan(input, key, scope)
       if (journal.state !== 'uncertain' && journal.state !== 'creating') return present(journal)
-      const candidate = (await listing()).recoveryWorkspaces.find((row) => row.id === input.workspaceId)
+      const inventory = (await listing()).recoveryWorkspaces
+      const candidate = inventory.find((row) => row.id === input.workspaceId)
       if (!candidate || candidate.id === journal.source?.id) {
         throw new RequestError('invalid_input', '请选择已创建的 Git 工作区，不能选择来源工作区。')
       }
-      if (journal.source && candidate.hostId !== journal.source.hostId) {
-        throw new RequestError('workspace_changed', '恢复目标与创建时的主机不同，请重新核对。')
+      if (!sameProject(journal.source, candidate, inventory)) {
+        throw new RequestError('workspace_changed', '恢复目标与创建时的项目或主机不同，请重新核对。')
       }
       const existing = await getWorkspaceLink(orca, candidate.id)
       if (existing && !(String(existing.workItemId) === String(resolved.item.id) && existing.typeKey === resolved.item.typeKey &&
@@ -322,7 +371,7 @@ export function registerWorkspaceCreation(orca: OrcaWorkerApi, options: {
       requireSettledCreation(key)
       const journal = await requirePlan(input, key, scope)
       if (journal.state !== 'uncertain' && journal.state !== 'creating') return present(journal)
-      // Only this explicit user action issues a new request ID after an uncertain create.
+      // Only explicit confirmation may replace an uncertain plan; native creates are not replayable.
       return present(await fresh(resolved, key))
     })
   })
@@ -333,8 +382,10 @@ export function registerWorkspaceCreation(orca: OrcaWorkerApi, options: {
     return serial(scope, async (key) => {
       const journal = await requirePlan(input, key, scope)
       if (journal.state !== 'linked' || !journal.receipt) throw new RequestError('not_linked', '请先完成工作区关联。')
-      const current = (await orca.host.call('workspace.list')).workspaces.find((row) => row.id === journal.receipt!.workspaceId)
-      if (!current || current.path !== journal.receipt.path) throw new RequestError('workspace_changed', '工作区已移除或路径变化，请在 Orca 中核对。')
+      const inventory = (await listing()).recoveryWorkspaces
+      const current = inventory.find((row) => row.id === journal.receipt!.workspaceId)
+      if (!current || (journal.receipt.path !== undefined && current.path !== journal.receipt.path) ||
+        !sameProject(journal.source, current, inventory)) throw new RequestError('workspace_changed', '工作区已移除或项目、主机或路径变化，请在 Orca 中核对。')
       await revalidate(journal)
       return orca.host.call('workspace.open', { workspaceId: journal.receipt.workspaceId })
     })

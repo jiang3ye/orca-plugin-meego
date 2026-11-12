@@ -4,7 +4,7 @@
 
 ## 正式安装
 
-在兼容的 Orca 中打开「设置 → 插件」，使用 Git 仓库安装入口选择 `jiang3ye/orca-plugin-meego` 的已验证版本。检查来源、插件身份 `jiang3ye.meego` 和请求的权限后再批准。安装完成后，可在「设置 → 集成」进入飞书项目连接页。
+在兼容的 Orca 中打开「设置 → 插件」，使用 Git 仓库安装入口选择 `jiang3ye/orca-plugin-meego` 的已验证版本。检查来源、插件身份 `jiang3ye.meego` 和请求的权限后再批准。创建 Git 工作区使用官方 `workspace:create` 权限，并遵循项目的初始化设置；需要询问的初始化脚本应在 Orca 内先处理。安装完成后，可在「设置 → 集成」进入飞书项目连接页。
 
 CLI 也使用 Orca 自带的安装器：
 

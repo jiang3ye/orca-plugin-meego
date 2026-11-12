@@ -9,7 +9,7 @@
   },
   "license": "MIT",
   "engines": {
-    "orca": ">=1.4.255"
+    "orca": ">=1.4.258"
   },
   "execution": "trusted-worker",
   "pluginApi": 1,
@@ -80,6 +80,9 @@
     },
     {
       "kind": "workspace:write"
+    },
+    {
+      "kind": "workspace:create"
     },
     {
       "kind": "agent:read"

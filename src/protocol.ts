@@ -48,6 +48,8 @@ export interface WorkspaceCreationSource {
   id: string
   name: string
   project?: string | null
+  /** Present in official host inventories; older journals may omit it. */
+  projectId?: string
   path: string
   branch: string
   hostId: string | null
@@ -56,8 +58,9 @@ export interface WorkspaceCreationSource {
 export interface CreatedWorkspaceReceipt {
   workspaceId: string
   name: string
-  branch: string | null
-  path: string
+  /** The host receipt may contain only the ID until inventory is available. */
+  branch?: string | null
+  path?: string
 }
 
 /** A durable plan: uncertain outcomes never authorize another create call. */

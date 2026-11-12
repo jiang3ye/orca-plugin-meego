@@ -158,8 +158,8 @@ export function WorkspaceCreationPanel({ onError, onCreated }: { onError: ErrorH
           <Button size="sm" variant="ghost" disabled={busy} onPress={() => act(target, plan, 'restart', onError)}>已核对，未创建</Button>
         </Stack> : null}
         {plan?.receipt ? <Stack gap="xs">
-          <Text size="sm">{`${plan.receipt.name} · ${plan.receipt.branch ?? '无分支'}`}</Text>
-          <Text size="xs" muted>{plan.receipt.path}</Text>
+          <Text size="sm">{`${plan.receipt.name} · ${plan.receipt.branch === undefined ? '分支待核对' : plan.receipt.branch ?? '无分支'}`}</Text>
+          <Text size="xs" muted>{plan.receipt.path ?? plan.receipt.workspaceId}</Text>
           {plan.state === 'created' ? <Button size="sm" tone="accent" disabled={busy} onPress={() => act(target, plan, 'retry', onError, onCreated)}>重试关联已有工作区</Button> : null}
           {plan.state === 'linked' ? <Stack gap="xs">
             <Callout tone="success">工作区已创建并关联。打开后，可将工作项交给 Agent。</Callout>

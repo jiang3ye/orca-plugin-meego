@@ -49,7 +49,7 @@ if (source === 'source') {
 
 const { mockHost } = await import(pathToFileURL(testingKit).href)
 const host = mockHost({
-  capabilities: ['agent:read', 'settings:own', 'workspace:read', 'workspace:write'],
+  capabilities: ['agent:read', 'settings:own', 'workspace:read', 'workspace:write', 'workspace:create'],
   results: { 'settings.open': { opened: true }, 'agents.available': { agents: [] } }
 })
 for (const method of ['settings.open', 'agents.available', 'workspace.create']) {
