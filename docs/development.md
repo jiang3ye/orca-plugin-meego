@@ -45,7 +45,7 @@ The locally verified baseline is 185 passing behavior tests and 11 check scenari
 
 ## CI SDK and release checks
 
-Every push and pull request is configured to run source inventory checks on Linux, macOS and Windows, plus the complete `npm run check` on a macOS 15 ARM64 runner. The SDK job generates types, validates the manifest, typechecks, runs the offline behavior tests and all panel scenarios, and checks the source inventory. Source-only success cannot stand in for this job.
+Every push and pull request is configured to run source inventory checks on Linux, macOS and Windows, plus the complete `npm run check` on a macOS 15 Intel runner. The SDK job generates types, validates the manifest, typechecks, runs the offline behavior tests and all panel scenarios, and checks the source inventory. Source-only success cannot stand in for this job. Public-release SDK verification separately runs on ARM64; the default source build uses Intel to avoid the ARM64 capacity queue.
 
 Default CI checks out the pinned host source and builds its official CLI. It does not download a private full desktop ZIP. In that host checkout, the canonical checks and build are:
 

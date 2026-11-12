@@ -83,7 +83,7 @@ orca plugin inspect . --json
 
 `check` 会生成官方 SDK 类型，依次运行 manifest 校验、严格类型检查、离线测试、面板场景和源码清单检查。CLI 由兼容的 Orca 构建提供，不要安装同名 npm 包。测试与检查场景使用合成数据和离线 mock，不需要真实账号。
 
-每次 push 和 pull request 的 CI 配置同时包含三系统源码检查与 macOS 15 ARM64 的完整 SDK 检查。默认流程检出固定宿主源码提交，用 canonical generation 的 `--check` 校验 SDK 声明与运行时，运行宿主官方 CLI 构建，再确认 `out/package.json.commit` 与固定提交完全一致；不下载私有全量宿主 ZIP，也不使用手写 SDK 替代。
+每次 push 和 pull request 的 CI 配置同时包含三系统源码检查与 macOS 15 Intel 的完整 SDK 检查。默认流程检出固定宿主源码提交，用 canonical generation 的 `--check` 校验 SDK 声明与运行时，运行宿主官方 CLI 构建，再确认 `out/package.json.commit` 与固定提交完全一致；不下载私有全量宿主 ZIP，也不使用手写 SDK 替代。
 
 插件 `v*` 标签及手动选择公开宿主版本的检查另有门槛：必须使用已发布、已验证包含所需 API 的官方 Orca release，不能用配套分支的源码构建代替。当前尚无符合条件的已验证公开版本。每次云端结果见仓库 [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions)，以对应提交和运行的完整 SDK job 日志为依据；前述 202 项测试和 11 个场景是本地验证基线。详见[发布指南](docs/releasing.md#github-检查)。
 
