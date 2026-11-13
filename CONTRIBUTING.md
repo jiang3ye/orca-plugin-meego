@@ -1,6 +1,6 @@
 # Contributing
 
-This project is an experimental Meego integration for a companion Orca host. Public Orca 1.4.256 and public main do not include all required platform APIs. Start with the [development guide](docs/development.md) and the [architecture](docs/architecture.md); use the companion host and matching CLI, not a public release selected only by version number.
+This project is an experimental Meego integration for a companion Orca host. The checked public Orca 1.4.258 does not include all required platform APIs. Start with the [development guide](docs/development.md) and the [architecture](docs/architecture.md); use the companion host and matching CLI, not a public release selected only by version number.
 
 ## Prepare a change
 
@@ -16,10 +16,10 @@ Use Node.js 24 or later and the CLI from the matching companion build:
 
 ```sh
 npm ci
-npm run check
+npm run check:development
 ```
 
-`check` generates official SDK types before validating the manifest, typechecking, testing, rendering panel scenarios and checking the source allowlist. Orca supplies the CLI; do not install the unrelated npm package named `orca`.
+`check:development` generates official SDK types before validating the manifest, typechecking, testing, rendering panel scenarios and checking the source allowlist. Development validation explicitly allows unreleased fields while retaining all numbered engine floors. Default `check`, release preparation and catalog validation stay strict until the host maintainers assign the first supporting release. Orca supplies the CLI; do not install the unrelated npm package named `orca`.
 
 `.orca/types` is generated and ignored. Do not commit it, edit it or introduce another hand-written Orca API mirror. Keep `src/protocol.ts` as the shared request/event contract.
 

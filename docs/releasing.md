@@ -1,6 +1,6 @@
 # 发布准备
 
-当前版本 `0.1.0-dev.1` 是独立社区集成的开发预览，目标仓库为 `jiang3ye/orca-plugin-meego`，非 Orca、飞书项目或 Meegle 官方产品。已核查的公开 Orca **v1.4.258** 仍没有完整的配套宿主接口；本插件不能声称兼容所有 `>=1.4.258` 的公开安装版。
+当前版本 `0.1.0-dev.1` 是独立社区集成的开发预览，目标仓库为 `jiang3ye/orca-plugin-meego`，非 Orca、飞书项目或 Meegle 官方产品。已核查的公开 Orca **v1.4.258** 仍没有完整的配套宿主接口；本插件不能声称兼容所有 `>=1.4.259` 的公开安装版。
 
 ## 宿主前置条件
 
@@ -14,7 +14,7 @@
 
 日常 CI 从 [`.github/orca-sdk.json`](../.github/orca-sdk.json) 指定的 `jiang3ye/orca` 源码完整提交构建真实 Orca CLI。固定记录中的 `repository` 与 `commit` 是构建身份的唯一来源；文档不复制提交 SHA，也不以可移动分支或推测版本替代。
 
-v1.4.258 的[面板严格 schema](https://github.com/stablyai/orca/blob/v1.4.258/src/shared/plugins/contributions/plugin-panel-contribution.ts)会在执行插件之前拒绝新的 `location` 字段；其[Host API](https://github.com/stablyai/orca/blob/v1.4.258/docs/reference/plugin-host-api.md)尚缺 `settings.open` 与 `agents.available`。manifest 的 `>=1.4.258` 是开发平台的字段版本下限，不能代替公开宿主兼容证明；不要猜测未来版本号。
+v1.4.258 的[面板严格 schema](https://github.com/stablyai/orca/blob/v1.4.258/src/shared/plugins/contributions/plugin-panel-contribution.ts)会在执行插件之前拒绝新的 `location` 字段；其[Host API](https://github.com/stablyai/orca/blob/v1.4.258/docs/reference/plugin-host-api.md)尚缺 `settings.open` 与 `agents.available`。配套宿主将新面板字段标为 `unreleased`，由维护者在真正发布时分配版本；manifest 的 `>=1.4.259` 跟随上游已有能力的字段下限，不能证明新面板字段已经发布。开发校验必须显式允许未发布字段，正式校验与目录仍拒绝；不要猜测未来版本号。
 
 源码公开和上游 PR 不代表已满足目录可安装版本的发布条件。配套宿主[PR #41598](https://github.com/stablyai/orca/pull/41598) 仍需上游审查并进入已发布、可获取的官方 Orca 版本；使用该版本的 CLI 重新生成 SDK、校验、类型检查并验收，再更新真正的公开最低版本。日常固定源码构建不能替代这一官方发布门槛。当前已按宿主要求完成隔离 macOS Electron/CDP 桌面流程，覆盖真实插件界面、worker、原生工作区和 Agent 终端；提供方 HTTP 与模型端使用合成 fixture。发布前仍需在首个支持这些 API 的官方宿主版本复验兼容性；该桌面证据不代表真实云端模型、其他系统或远端实机都已验收。
 
@@ -24,11 +24,10 @@ v1.4.258 的[面板严格 schema](https://github.com/stablyai/orca/blob/v1.4.258
 
 ```sh
 npm ci
-npm run check
-orca plugin inspect . --json
+npm run check:development
 ```
 
-`check` 顺序执行官方 SDK 生成、manifest 校验、严格类型检查、离线测试、面板场景检查和源码清单检查。CLI 随 Orca 应用提供；**不要执行 `npm install orca`**，该 npm 名称不是本项目依赖的 Orca CLI。
+`check:development` 顺序执行官方 SDK 生成、manifest 校验、严格类型检查、离线测试、面板场景检查和源码清单检查；仅开发校验传入 `--allow-unreleased`，保留所有已发布字段的版本检查。默认 `npm run check` 与 `release:prepare` 是正式校验，在宿主维护者分配真实最低版本前应失败。CLI 随 Orca 应用提供；**不要执行 `npm install orca`**，该 npm 名称不是本项目依赖的 Orca CLI。
 
 检查通过并提交已审阅的改动后：
 
@@ -46,7 +45,7 @@ npm run release:prepare
 
 | 触发与用途 | 宿主来源 | 检查范围 |
 | --- | --- | --- |
-| 每次 push / pull request 的默认 CI | 从固定配套宿主源码提交构建的真实 CLI | Linux、macOS、Windows 源码检查，以及 macOS 15 Intel 的完整 `npm run check` |
+| 每次 push / pull request 的默认 CI | 从固定配套宿主源码提交构建的真实 CLI | Linux、macOS、Windows 源码检查，以及 macOS 15 Intel 的完整 `npm run check:development` |
 | 插件 `v*` 标签 / 手动公开版本覆盖 | 已发布且经验证兼容的官方 Orca release，macOS 15 ARM64 | 官方宿主兼容门槛、版本一致性及完整 SDK 检查；不能用配套分支构建代替 |
 
 ### 默认源码构建
@@ -66,7 +65,7 @@ pnpm build:cli
 
 使用产物前必须确认 `out/package.json.commit` 与固定记录中的完整 `commit` 完全一致。之后将该 CLI 用于插件的 SDK 生成和全部检查。更新固定提交时，生成声明与运行时资源应已通过宿主官方生成流程同步并提交；不能只替换声明，或在插件中添加类型镜像掩盖漂移。
 
-macOS 15 Intel 的 SDK 检查在每次 push 和 pull request 执行完整 `npm run check`：SDK 类型生成、manifest 校验、严格类型检查、离线行为测试、全部面板场景和源码清单检查。当前本地基线为 218 项行为测试和 11 个场景。三系统源码检查仍独立保留，其通过结果不能替代 SDK 检查。
+macOS 15 Intel 的 SDK 检查在每次 push 和 pull request 执行完整 `npm run check:development`：SDK 类型生成、manifest 校验、严格类型检查、离线行为测试、全部面板场景和源码清单检查。公开 release SDK 路线保持严格的 `npm run check`。当前本地基线为 218 项行为测试和 11 个场景。三系统源码检查仍独立保留，其通过结果不能替代 SDK 检查。
 
 固定提交不可获取、生成资源过期或构建身份不一致时应明确失败，不能降级为仅源码检查或跳过 SDK。每次云端结果见仓库 [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions)。报告某次检查通过时，应以对应提交和运行的完整 SDK job 日志为依据，确认各阶段实际执行并通过；218 项测试和 11 个场景仅是本地验证基线。
 

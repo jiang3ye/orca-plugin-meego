@@ -4,7 +4,7 @@ This is an Orca trusted-worker plugin. TS/TSX source loads directly; npm is deve
 
 - Read `docs/architecture.md` for ownership and `docs/development.md` for the SDK workflow.
 - Use a compatible Orca CLI and generate `.orca/types` with `npm run sdk`. Do not write or commit replacement Orca SDK declarations.
-- Run `npm run check` after behavior changes. Add behavioral regressions at the owning layer; avoid copy, styling, timing, and private-state tests.
+- Run `npm run check:development` with the pinned companion SDK after behavior changes. Default `npm run check` remains strict for public-release validation. Add behavioral regressions at the owning layer; avoid copy, styling, timing, and private-state tests.
 - Use Orca declarative components and their spacing, tone, and size tokens. Panels have no DOM, network, React hooks, or arbitrary CSS.
 - Worker requests own authentication and all side effects. Preserve account, region, space, work-item, revision, and workspace identity checks.
 - Never automatically resend an uncertain write or repeat an uncertain workspace creation. An accepted launch is not proof that an Agent received its prompt.

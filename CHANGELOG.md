@@ -32,7 +32,7 @@ This is an independent community integration, not an official Orca or Feishu Pro
 
 ### CI configuration
 
-- Every push and pull request is configured for three-OS source checks and a complete `npm run check` on macOS 15 Intel, including SDK generation, manifest validation, strict types, offline tests, panel scenarios and source inventory.
+- Every push and pull request is configured for three-OS source checks and a complete `npm run check:development` on macOS 15 Intel, including SDK generation, explicit unreleased-field validation, strict types, offline tests, panel scenarios and source inventory. Public-release SDK checks remain strict.
 - Default CI builds the pinned host source instead of downloading a private full desktop ZIP. It checks canonical declaration/runtime generation with `--check`, runs the official CLI build, and verifies `out/package.json.commit` against the full pinned commit before using the CLI. No hand-written SDK substitutes are used.
 - Plugin `v*` tags and manual public-release overrides require a compatible, published official Orca release independently of the default source-built SDK. A companion-fork build cannot satisfy that gate. No verified public release currently meets it.
 
