@@ -83,7 +83,7 @@
 
 隔离环境已验证正式 Git 安装的审批、启停、升级与实际回滚、卸载和重新安装，以及开发目录卸载。连接移除覆盖失败重试与重启后的防回退；这些验收没有清理真实账号。
 
-离线验证包括 217 项行为测试、11 个检查场景，以及 20 张设置页、36 张核心界面及 20 张开发工作区原生 fixture 截图。
+离线验证包括 218 项行为测试、11 个检查场景，以及 20 张设置页、36 张核心界面及 20 张开发工作区原生 fixture 截图。
 
 已按从上游公开历史恢复的 Electron 技能及当前仓库约束，用 Playwright CDP 完成隔离 macOS 桌面流程：原生集成入口、授权恢复、按名称选空间、工作项详情、目录关联、创建并打开工作区、选择 Agent、打开对应终端并在画面中回读完整提示词，以及移除测试连接。另有公开的通用插件桌面回归覆盖开发挂载移除。飞书 HTTP 和模型端使用明确的合成 fixture；UI、worker、加密存储、原生工作区与 PTY 为真实实现。此证据不代表新版真实云端模型响应、其他系统或远端实机均已验收。
 
@@ -101,7 +101,7 @@ orca plugin inspect . --json
 
 每次 push 和 pull request 的 CI 配置同时包含三系统源码检查与 macOS 15 Intel 的完整 SDK 检查。默认流程检出固定宿主源码提交，用 canonical generation 的 `--check` 校验 SDK 声明与运行时，运行宿主官方 CLI 构建，再确认 `out/package.json.commit` 与固定提交完全一致；不下载私有全量宿主 ZIP，也不使用手写 SDK 替代。
 
-插件 `v*` 标签及手动选择公开宿主版本的检查另有门槛：必须使用已发布、已验证包含所需 API 的官方 Orca release，不能用配套分支的源码构建代替。当前尚无符合条件的已验证公开版本。每次云端结果见仓库 [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions)，以对应提交和运行的完整 SDK job 日志为依据；前述 217 项测试和 11 个场景是本地验证基线。详见[发布指南](docs/releasing.md#github-检查)。
+插件 `v*` 标签及手动选择公开宿主版本的检查另有门槛：必须使用已发布、已验证包含所需 API 的官方 Orca release，不能用配套分支的源码构建代替。当前尚无符合条件的已验证公开版本。每次云端结果见仓库 [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions)，以对应提交和运行的完整 SDK job 日志为依据；前述 218 项测试和 11 个场景是本地验证基线。详见[发布指南](docs/releasing.md#github-检查)。
 
 - [开发指南](docs/development.md)：模块职责、SDK 类型和验证流程。
 - [架构说明](docs/architecture.md)：请求边界、持久状态与写入保护。

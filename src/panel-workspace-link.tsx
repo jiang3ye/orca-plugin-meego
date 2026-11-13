@@ -45,13 +45,17 @@ function workspaceLocation(hostId: string | null): string {
   return hostId === null || hostId === 'local' ? '本机' : hostId.startsWith('ssh:') ? 'SSH 远端' : '配对远端'
 }
 
+function sameWorkspaceRevision(left: WorkspaceContextInfo, right: WorkspaceContextInfo): boolean {
+  return left.workspaceId === right.workspaceId && left.branch === right.branch && left.path === right.path &&
+    left.hostId === right.hostId && left.link?.linkedAt === right.link?.linkedAt
+}
+
 async function readSelected(target: Target, workspaceId: string, request: number): Promise<void> {
   const context = await plugin.request('meego.workspaceContext', { workspaceId })
   if (!valid(target, request) || workspaceId !== read(selectedAtom)) return
   if (context.workspaceId !== workspaceId) throw new Error(context.unavailableReason || '无法核对所选代码目录，请刷新工作区列表。')
   const previous = read(contextAtom)
-  if (previous && (previous.workspaceId !== context.workspaceId || previous.branch !== context.branch || previous.path !== context.path ||
-    previous.hostId !== context.hostId || previous.isActive !== context.isActive || previous.link?.linkedAt !== context.link?.linkedAt)) cancelHandoff('detail')
+  if (previous && (!sameWorkspaceRevision(previous, context) || (previous.isActive !== false && context.isActive === false))) cancelHandoff('detail')
   set(contextAtom, context)
 }
 
@@ -214,9 +218,10 @@ export function WorkspaceLinkPanel({ disabled = false, onError }: { disabled?: b
       <Row gap="xs" wrap>
         {linked ? <>
           <Button size="sm" variant="solid" tone="accent" icon="agent" disabled={busy} onPress={() => {
-            if (context !== read(contextAtom) || !context.link || !isLinked(target, context)) return
+            const current = read(contextAtom)
+            if (target !== read(targetAtom) || !available(current) || !sameWorkspaceRevision(context, current) || !current.link || !isLinked(target, current)) return
             beginHandoff({ item: target.ref, name: target.item.name, description: target.item.description, origin: 'detail',
-              expectedUserKey: target.ref.expectedUserKey, expectedLinkedAt: context.link.linkedAt }, context)
+              expectedUserKey: target.ref.expectedUserKey, expectedLinkedAt: current.link.linkedAt }, current)
           }}>交给 Agent</Button>
           <Button size="sm" variant="outline" disabled={busy} onPress={() => openWorkspace(target, context, onError)}>打开工作区</Button>
           <Button size="sm" variant="ghost" disabled={busy} onPress={() => unlinkWorkspace(target, context, onError)}>解除此关联</Button>

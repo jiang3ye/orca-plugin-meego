@@ -96,6 +96,52 @@ test('choosing another directory cancels an old handoff and ignores its late Age
   } finally { finish({ agents: [] }); await view.unmount() }
 })
 
+test('opening the selected directory preserves its explicit Agent handoff when the active context catches up', async () => {
+  const link: WorkspaceLink = { workItemId: item.id, typeKey: 'story', name: item.name, status: item.status, source, accountKey: 'user-a', branch: 'feat/login', linkedAt: 42, url: item.url }
+  let active = false
+  let revision: Partial<WorkspaceContextInfo> = {}
+  const sends: unknown[] = []
+  const view = await mount(fixture(), { host: mockHost({ requests: {
+    'meego.workspaceOptions': () => ({ workspaces: directories.map((row) => ({ ...row, linkedToItem: row.id === 'code-a' })), activeWorkspaceId: active ? 'code-a' : null, truncated: false }),
+    'meego.workspaceContext': () => ({ ...context('code-a', link), isActive: active,
+      agents: active ? [{ terminalId: 'existing-terminal', title: 'Existing Claude', agent: 'claude', state: 'done' }] : [], ...revision }),
+    'meego.agentChoices': () => ({ agents: [{ id: 'claude', label: 'Claude Code' }] }),
+    'meego.sendToAgent': (input: unknown) => { sends.push(input); return { sent: true, detail: '已接收启动请求' } }
+  } }) })
+  try {
+    await view.settled()
+    await refreshWorkspaceLink()
+    await view.press({ text: '交给 Agent' })
+    await view.select({ label: '启动的 Agent' }, 'claude')
+    active = true
+    await refreshWorkspaceLink()
+    await view.settled()
+    await view.press({ text: '启动 Agent 并发送' })
+    await view.press({ text: '交给 Agent' })
+    await view.select({ label: '目标 Agent' }, 'meego:new-agent')
+    await view.select({ label: '启动的 Agent' }, 'claude')
+    await view.select({ label: '目标 Agent' }, 'existing-terminal')
+    active = false
+    await refreshWorkspaceLink()
+    await view.settled()
+    assert.equal(view.find({ text: '启动 Agent 并发送' }), null)
+    assert.equal(view.find({ text: '写入 Agent 输入框' }), null)
+    for (const changed of [{ path: '/code/moved' }, { branch: 'other-branch' }, { hostId: 'ssh:other-host' }, { link: { ...link, linkedAt: 43 } }]) {
+      revision = {}
+      await refreshWorkspaceLink()
+      await view.settled()
+      revision = changed
+      await refreshWorkspaceLink()
+      await view.press({ text: '交给 Agent' })
+      assert.equal(view.find({ text: '启动 Agent 并发送' }), null)
+      assert.equal(view.find({ text: '写入 Agent 输入框' }), null)
+    }
+    assert.deepEqual(sends, [{ ...ref, workspaceId: 'code-a', terminalId: null, agent: 'claude', linked: true, expectedLinkedAt: 42 }])
+    assert.deepEqual(view.errors, [])
+    assert.deepEqual(view.refusals, [])
+  } finally { await view.unmount() }
+})
+
 test('replacing another work item requires its displayed association version and never writes while selecting', async () => {
   const old: WorkspaceLink = { workItemId: 321, typeKey: 'issue', name: '旧工作项', status: 'Open', branch: 'feat/login', linkedAt: 99, url: 'https://project.feishu.cn/demo/issue/detail/321', source }
   const writes: unknown[] = []

@@ -66,9 +66,9 @@ pnpm build:cli
 
 使用产物前必须确认 `out/package.json.commit` 与固定记录中的完整 `commit` 完全一致。之后将该 CLI 用于插件的 SDK 生成和全部检查。更新固定提交时，生成声明与运行时资源应已通过宿主官方生成流程同步并提交；不能只替换声明，或在插件中添加类型镜像掩盖漂移。
 
-macOS 15 Intel 的 SDK 检查在每次 push 和 pull request 执行完整 `npm run check`：SDK 类型生成、manifest 校验、严格类型检查、离线行为测试、全部面板场景和源码清单检查。当前本地基线为 217 项行为测试和 11 个场景。三系统源码检查仍独立保留，其通过结果不能替代 SDK 检查。
+macOS 15 Intel 的 SDK 检查在每次 push 和 pull request 执行完整 `npm run check`：SDK 类型生成、manifest 校验、严格类型检查、离线行为测试、全部面板场景和源码清单检查。当前本地基线为 218 项行为测试和 11 个场景。三系统源码检查仍独立保留，其通过结果不能替代 SDK 检查。
 
-固定提交不可获取、生成资源过期或构建身份不一致时应明确失败，不能降级为仅源码检查或跳过 SDK。每次云端结果见仓库 [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions)。报告某次检查通过时，应以对应提交和运行的完整 SDK job 日志为依据，确认各阶段实际执行并通过；217 项测试和 11 个场景仅是本地验证基线。
+固定提交不可获取、生成资源过期或构建身份不一致时应明确失败，不能降级为仅源码检查或跳过 SDK。每次云端结果见仓库 [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions)。报告某次检查通过时，应以对应提交和运行的完整 SDK job 日志为依据，确认各阶段实际执行并通过；218 项测试和 11 个场景仅是本地验证基线。
 
 ### 官方发布门槛
 

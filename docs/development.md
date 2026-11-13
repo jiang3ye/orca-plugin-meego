@@ -41,7 +41,7 @@ Tests fake HTTP and host boundaries and perform no live Feishu writes. Fixtures 
 
 Add a behavior regression at the layer that owns the change. Prefer hardcoded expected payloads for identity, account/source boundaries and mutation outcomes. Avoid tests for colors, copy, private state or helper call counts. Settings tests must remain connection-only and must not query work items or workspaces.
 
-The locally verified baseline is 217 passing behavior tests and 11 check scenarios. Presentation evidence contains 20 settings PNGs, 36 core UI PNGs and 20 workspace-flow PNGs. The separate isolated macOS Electron/CDP journey verifies the actual Meego components and worker through native workspace creation and Agent terminal display; screenshots alone do not supply that evidence. Its provider HTTP and model TUI are synthetic, with real host APIs, storage, workspace files and PTY. A current real cloud-model response, non-macOS and remote live flows remain separate acceptance scopes.
+The locally verified baseline is 218 passing behavior tests and 11 check scenarios. Presentation evidence contains 20 settings PNGs, 36 core UI PNGs and 20 workspace-flow PNGs. The separate isolated macOS Electron/CDP journey verifies the actual Meego components and worker through native workspace creation and Agent terminal display; screenshots alone do not supply that evidence. Its provider HTTP and model TUI are synthetic, with real host APIs, storage, workspace files and PTY. A current real cloud-model response, non-macOS and remote live flows remain separate acceptance scopes.
 
 The Electron skill used for this run was recovered from [its upstream public history](https://github.com/stablyai/orca/blob/3a138a2f07f642390642db736a733580c50e9be3/.agents/skills/electron/SKILL.md). Follow the current host tests/AGENTS.md and tests/e2e/AGENTS.md background, profile-isolation and CDP rules over historical launch examples.
 
@@ -64,7 +64,7 @@ Generated authoring declarations and runtime resources must come from the same c
 
 Plugin `v*` tags and a manual public-release override require a compatible, published official Orca release. That gate is separate from the default source-built SDK and cannot be satisfied by a companion-fork build. There is currently no verified public release satisfying it. See the [release guide](releasing.md#github-检查) for the publication boundary.
 
-These statements describe the workflow configuration. Cloud results are recorded in repository [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions); cite the complete SDK job logs for the corresponding commit and run when reporting a successful cloud check. The recorded 217 tests and 11 scenarios above remain the local verification baseline.
+These statements describe the workflow configuration. Cloud results are recorded in repository [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions); cite the complete SDK job logs for the corresponding commit and run when reporting a successful cloud check. The recorded 218 tests and 11 scenarios above remain the local verification baseline.
 
 ## Local development
 
