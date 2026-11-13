@@ -2,7 +2,7 @@
 
 ## Required host
 
-This is an independent community integration, not an official Orca or Feishu Project / Meegle product. The checked public Orca v1.4.257 does not include all required APIs; its [strict panel schema](https://github.com/stablyai/orca/blob/v1.4.257/src/shared/plugins/contributions/plugin-panel-contribution.ts) rejects the `location` field used here. A numerically compatible version is insufficient.
+This is an independent community integration, not an official Orca or Feishu Project / Meegle product. The checked public Orca v1.4.258 does not include all required APIs; its [strict panel schema](https://github.com/stablyai/orca/blob/v1.4.258/src/shared/plugins/contributions/plugin-panel-contribution.ts) rejects the `location` field used here. A numerically compatible version is insufficient.
 
 Default CI builds the real Orca CLI from the exact `jiang3ye/orca` source commit recorded in [`.github/orca-sdk.json`](../.github/orca-sdk.json). Its `repository` and full `commit` are the source of truth; do not duplicate a moving branch or a short hash in setup instructions. Generated declarations and runtime resources are checked together before building. The manifest engine floor describes platform grammar, not support in public Orca releases.
 

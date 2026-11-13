@@ -2,7 +2,7 @@
 
 Meego for Orca separates presentation, provider access and native workspace effects. It currently implements Feishu Project / Meegle only. There are no Jira or Linear adapters.
 
-This architecture requires the companion host pinned in [`.github/orca-sdk.json`](../.github/orca-sdk.json). Checked public Orca v1.4.257 lacks required settings/navigation and Agent discovery fields. The development engine floor is not a public compatibility guarantee. See [development](development.md) and [releasing](releasing.md).
+This architecture requires the companion host pinned in [`.github/orca-sdk.json`](../.github/orca-sdk.json). Checked public Orca v1.4.258 rejects the required settings-panel `location` field in its strict manifest schema. The development engine floor is not a public compatibility guarantee. See [development](development.md) and [releasing](releasing.md).
 
 ## Runtime boundaries
 

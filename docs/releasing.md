@@ -1,6 +1,6 @@
 # 发布准备
 
-当前版本 `0.1.0-dev.1` 是独立社区集成的开发预览，目标仓库为 `jiang3ye/orca-plugin-meego`，非 Orca、飞书项目或 Meegle 官方产品。已核查的公开 Orca **v1.4.257** 仍没有完整的配套宿主接口；本插件不能声称兼容所有 `>=1.4.258` 的公开安装版。
+当前版本 `0.1.0-dev.1` 是独立社区集成的开发预览，目标仓库为 `jiang3ye/orca-plugin-meego`，非 Orca、飞书项目或 Meegle 官方产品。已核查的公开 Orca **v1.4.258** 仍没有完整的配套宿主接口；本插件不能声称兼容所有 `>=1.4.258` 的公开安装版。
 
 ## 宿主前置条件
 
@@ -14,9 +14,9 @@
 
 日常 CI 从 [`.github/orca-sdk.json`](../.github/orca-sdk.json) 指定的 `jiang3ye/orca` 源码完整提交构建真实 Orca CLI。固定记录中的 `repository` 与 `commit` 是构建身份的唯一来源；文档不复制提交 SHA，也不以可移动分支或推测版本替代。
 
-v1.4.257 的[面板严格 schema](https://github.com/stablyai/orca/blob/v1.4.257/src/shared/plugins/contributions/plugin-panel-contribution.ts)会在执行插件之前拒绝新的 `location` 字段；其[Host API](https://github.com/stablyai/orca/blob/v1.4.257/docs/reference/plugin-host-api.md)也没有这些扩展。manifest 的 `>=1.4.258` 是开发平台的字段版本下限，不能代替公开宿主兼容证明；不要猜测未来版本号。
+v1.4.258 的[面板严格 schema](https://github.com/stablyai/orca/blob/v1.4.258/src/shared/plugins/contributions/plugin-panel-contribution.ts)会在执行插件之前拒绝新的 `location` 字段；其[Host API](https://github.com/stablyai/orca/blob/v1.4.258/docs/reference/plugin-host-api.md)尚缺 `settings.open` 与 `agents.available`。manifest 的 `>=1.4.258` 是开发平台的字段版本下限，不能代替公开宿主兼容证明；不要猜测未来版本号。
 
-源码公开和上游草稿 PR 不代表已满足目录可安装版本的发布条件。配套宿主[PR #41598](https://github.com/stablyai/orca/pull/41598) 仍需上游审查并进入已发布、可获取的官方 Orca 版本；使用该版本的 CLI 重新生成 SDK、校验、类型检查并验收，再更新真正的公开最低版本。日常固定源码构建不能替代这一官方发布门槛。当前已按宿主要求完成隔离 macOS Electron/CDP 桌面流程，覆盖真实插件界面、worker、原生工作区和 Agent 终端；提供方 HTTP 与模型端使用合成 fixture。发布前仍需在首个支持这些 API 的官方宿主版本复验兼容性；该桌面证据不代表真实云端模型、其他系统或远端实机都已验收。
+源码公开和上游 PR 不代表已满足目录可安装版本的发布条件。配套宿主[PR #41598](https://github.com/stablyai/orca/pull/41598) 仍需上游审查并进入已发布、可获取的官方 Orca 版本；使用该版本的 CLI 重新生成 SDK、校验、类型检查并验收，再更新真正的公开最低版本。日常固定源码构建不能替代这一官方发布门槛。当前已按宿主要求完成隔离 macOS Electron/CDP 桌面流程，覆盖真实插件界面、worker、原生工作区和 Agent 终端；提供方 HTTP 与模型端使用合成 fixture。发布前仍需在首个支持这些 API 的官方宿主版本复验兼容性；该桌面证据不代表真实云端模型、其他系统或远端实机都已验收。
 
 ## 本地检查和干净快照
 
@@ -74,7 +74,7 @@ macOS 15 Intel 的 SDK 检查在每次 push 和 pull request 执行完整 `npm r
 
 插件 `v*` 标签和手动指定公开宿主版本时，必须选择已发布、可下载并验证包含全部所需 API 的官方 Orca release。该路线核对对应官方 ZIP 的 SHA256、应用身份和 CLI 版本，再执行完整检查；不能回退到配套 fork 的源码构建来满足官方发布条件。
 
-当前没有符合条件的已验证官方公开版本。不要用仍缺少扩展的公开 `v1.4.257`，也不要把配套 fork 或 CI 构建当作官方发布来解除门槛。发布标签在缺少合格官方宿主时必须明确失败。日常源码构建与 SDK 检查通过本身不能替代正式宿主兼容验证或桌面验收。当前隔离 macOS 桌面证据及其合成提供方边界见 README 的验证范围。
+当前没有符合条件的已验证官方公开版本。不要用仍缺少扩展的公开 `v1.4.258`，也不要把配套 fork 或 CI 构建当作官方发布来解除门槛。发布标签在缺少合格官方宿主时必须明确失败。日常源码构建与 SDK 检查通过本身不能替代正式宿主兼容验证或桌面验收。当前隔离 macOS 桌面证据及其合成提供方边界见 README 的验证范围。
 
 工作流不创建或发布插件 GitHub Release；插件正式发布仍按以下步骤执行。
 

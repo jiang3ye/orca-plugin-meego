@@ -2,7 +2,7 @@
 
 ## 0.1.0-dev.1 — draft companion-host preview
 
-This is an independent community integration, not an official Orca or Feishu Project / Meegle product. The preview requires companion platform changes. CI builds the real Orca CLI from the exact `jiang3ye/orca` source commit pinned in [`.github/orca-sdk.json`](.github/orca-sdk.json). The checked public Orca v1.4.257 still lacks required APIs, including the `location` field rejected by its [strict panel schema](https://github.com/stablyai/orca/blob/v1.4.257/src/shared/plugins/contributions/plugin-panel-contribution.ts). The manifest engine floor is not a public-release compatibility guarantee.
+This is an independent community integration, not an official Orca or Feishu Project / Meegle product. The preview requires companion platform changes. CI builds the real Orca CLI from the exact `jiang3ye/orca` source commit pinned in [`.github/orca-sdk.json`](.github/orca-sdk.json). The checked public Orca v1.4.258 still lacks required APIs, including the `location` field rejected by its [strict panel schema](https://github.com/stablyai/orca/blob/v1.4.258/src/shared/plugins/contributions/plugin-panel-contribution.ts). The manifest engine floor is not a public-release compatibility guarantee.
 
 ### Added
 

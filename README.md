@@ -8,9 +8,9 @@
 
 ## 兼容性
 
-已核查的公开 Orca **v1.4.257** 仍缺少本项目依赖的扩展，包括原生集成设置页、插件设置导航、可验证的工作区标识和按主机发现 Agent；其[严格面板 schema](https://github.com/stablyai/orca/blob/v1.4.257/src/shared/plugins/contributions/plugin-panel-contribution.ts)会拒绝当前使用的 `location` 字段。不能仅依据版本号安装使用。
+已核查的公开 Orca **v1.4.258** 仍不能加载当前插件：其[严格面板 schema](https://github.com/stablyai/orca/blob/v1.4.258/src/shared/plugins/contributions/plugin-panel-contribution.ts)会拒绝必需的 `location` 字段。不能仅依据版本号安装使用。
 
-配套宿主已有本地安装和分段验收记录。日常 CI 从 [`.github/orca-sdk.json`](.github/orca-sdk.json) 固定的 `jiang3ye/orca` 源码完整提交构建真实 Orca CLI，并校验生成声明与运行时资源一致。宿主改动已提交[上游草稿 PR #41598](https://github.com/stablyai/orca/pull/41598)，尚未完成官方公开宿主发布；manifest 中的宿主版本下限是平台语法门槛，不是公开版兼容承诺。
+配套宿主已有本地安装和分段验收记录。日常 CI 从 [`.github/orca-sdk.json`](.github/orca-sdk.json) 固定的 `jiang3ye/orca` 源码完整提交构建真实 Orca CLI，并校验生成声明与运行时资源一致。宿主改动已提交[上游 PR #41598](https://github.com/stablyai/orca/pull/41598)，尚未完成官方公开宿主发布；manifest 中的宿主版本下限是平台语法门槛，不是公开版兼容承诺。
 
 开始前需准备包含配套改动的宿主和与其匹配的 CLI。开发与发布流程见[开发指南](docs/development.md)和[发布指南](docs/releasing.md)。
 
