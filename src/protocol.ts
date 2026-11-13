@@ -238,6 +238,7 @@ export interface ListWorkItemsOutput {
 export interface SendToAgentOutput {
   sent: boolean
   detail: string
+  terminal?: { workspaceId: string; terminalId: string }
 }
 
 export interface CreateWorkItemInput {
@@ -321,6 +322,7 @@ declare module 'orca' {
     'meego.workspaceContext': { input: { workspaceId: string } | undefined; output: WorkspaceContextInfo }
     'meego.workspaceOptions': { input: WorkItemReference | undefined; output: WorkspaceOptions }
     'meego.openWorkspace': { input: { workspaceId: string }; output: { opened: true } }
+    'meego.openAgentTerminal': { input: { workspaceId: string; terminalId: string }; output: { focused: boolean } }
     'meego.agentChoices': { input: { workspaceId: string }; output: { agents: { id: string; label: string }[]; defaultAgent?: string } }
     'meego.openSettings': { output: { opened: boolean } }
     'meego.workspaceCreationPlan': { input: WorkItemReference; output: WorkspaceCreationPlan }

@@ -41,7 +41,9 @@ Tests fake HTTP and host boundaries and perform no live Feishu writes. Fixtures 
 
 Add a behavior regression at the layer that owns the change. Prefer hardcoded expected payloads for identity, account/source boundaries and mutation outcomes. Avoid tests for colors, copy, private state or helper call counts. Settings tests must remain connection-only and must not query work items or workspaces.
 
-The locally verified baseline is 214 passing behavior tests and 11 check scenarios. Presentation evidence contains 20 settings PNGs, 36 core UI PNGs and 20 workspace-flow PNGs. These fixture renders are not full rendered GUI acceptance. The mandated Electron skill is unavailable in the current environment, so that gap remains explicit.
+The locally verified baseline is 217 passing behavior tests and 11 check scenarios. Presentation evidence contains 20 settings PNGs, 36 core UI PNGs and 20 workspace-flow PNGs. The separate isolated macOS Electron/CDP journey verifies the actual Meego components and worker through native workspace creation and Agent terminal display; screenshots alone do not supply that evidence. Its provider HTTP and model TUI are synthetic, with real host APIs, storage, workspace files and PTY. A current real cloud-model response, non-macOS and remote live flows remain separate acceptance scopes.
+
+The Electron skill used for this run was recovered from [its upstream public history](https://github.com/stablyai/orca/blob/3a138a2f07f642390642db736a733580c50e9be3/.agents/skills/electron/SKILL.md). Follow the current host tests/AGENTS.md and tests/e2e/AGENTS.md background, profile-isolation and CDP rules over historical launch examples.
 
 ## CI SDK and release checks
 
@@ -62,7 +64,7 @@ Generated authoring declarations and runtime resources must come from the same c
 
 Plugin `v*` tags and a manual public-release override require a compatible, published official Orca release. That gate is separate from the default source-built SDK and cannot be satisfied by a companion-fork build. There is currently no verified public release satisfying it. See the [release guide](releasing.md#github-检查) for the publication boundary.
 
-These statements describe the workflow configuration. Cloud results are recorded in repository [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions); cite the complete SDK job logs for the corresponding commit and run when reporting a successful cloud check. The recorded 214 tests and 11 scenarios above remain the local verification baseline.
+These statements describe the workflow configuration. Cloud results are recorded in repository [Actions](https://github.com/jiang3ye/orca-plugin-meego/actions); cite the complete SDK job logs for the corresponding commit and run when reporting a successful cloud check. The recorded 217 tests and 11 scenarios above remain the local verification baseline.
 
 ## Local development
 
@@ -70,11 +72,11 @@ Use the companion CLI's documented development loader and watcher for source ite
 
 The sidebar and Settings frames share a worker and encrypted credential store, but each frame owns its atoms, subscriptions and request lifetime. Dispose authorization polling on close and discard late results after target or account changes.
 
-Agent selection belongs to the handoff action. New sessions require an explicit ID from the target host's installed and enabled catalog, revalidated before launch. Existing terminals receive unsubmitted drafts. A command with no existing Agent directs the user to the panel; legacy defaults do not silently launch a session.
+Agent selection belongs to the handoff action. New sessions require an explicit ID from the target host's installed and enabled catalog, revalidated before launch. Existing terminals receive unsubmitted drafts. Retain the host terminal receipt and expose a separate open action; opening revalidates exact workspace/terminal membership and never resends the prompt. A command with no existing Agent directs the user to the panel; legacy defaults do not silently launch a session.
 
 ## Acceptance and local records
 
-Installed-host checks have confirmed persistent encrypted login, native integration navigation, connection rendering, stable workspace identity, the target host’s installed and enabled Agent catalog, read-only access to an existing test item, and original PTY/incarnation reattachment. Earlier authorized business checks and isolated Agent delivery are segmented evidence; a new Agent has not yet been retested through the current installed build's full flow.
+Installed-host checks have confirmed persistent encrypted login, native integration navigation, connection rendering, stable workspace identity, the target host’s installed and enabled Agent catalog, read-only access to an existing test item, and original PTY/incarnation reattachment. Earlier authorized business checks and isolated Agent delivery are segmented evidence; the new isolated rendered journey uses a synthetic HTTP provider and model TUI while exercising the real native workspace and PTY. It does not establish a current live model response.
 
 Live business writes require an explicitly bounded scope and a durable record before submission. Ordinary tests and contributor checks must not use a live account. Keep rollback information and acceptance logs local; do not publish account identifiers, tenant labels, real item links or terminal identities.
 

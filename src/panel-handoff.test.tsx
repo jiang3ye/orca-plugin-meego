@@ -42,6 +42,7 @@ test('explicitly starts a new session even when an existing Agent is available',
     agents: [{ terminalId: 'claude-terminal', title: 'Claude Code', agent: 'claude', state: 'done' }]
   }
   let received: unknown
+  const actions: unknown[] = []
   const view = await mount({
     setup() {
       beginHandoff({ item: { id: 123, typeKey: 'story' }, name: '验收交接', description: '', origin: 'detail' }, context)
@@ -55,7 +56,12 @@ test('explicitly starts a new session even when an existing Agent is available',
     },
     'meego.sendToAgent': (input: unknown) => {
     received = input
-    return { sent: true, detail: '已接收启动请求。' }
+    actions.push({ send: input })
+    return { sent: true, detail: '已接收启动请求。', terminal: { workspaceId: 'workspace-a', terminalId: 'host-created-terminal' } }
+  },
+    'meego.openAgentTerminal': (input: unknown) => {
+      actions.push({ open: input })
+      return { focused: true }
   } } }) })
   try {
     await view.select({ label: '目标 Agent' }, 'meego:new-agent')
@@ -64,6 +70,14 @@ test('explicitly starts a new session even when an existing Agent is available',
     await view.select({ label: '启动的 Agent' }, 'project-claude')
     await view.press({ text: '启动 Agent 并发送' })
     assert.deepEqual(received, { id: 123, typeKey: 'story', workspaceId: 'workspace-a', terminalId: null, agent: 'project-claude' })
+    await view.press({ text: '打开 Agent 终端' })
+    assert.deepEqual(actions, [
+      { send: { id: 123, typeKey: 'story', workspaceId: 'workspace-a', terminalId: null, agent: 'project-claude' } },
+      { open: { workspaceId: 'workspace-a', terminalId: 'host-created-terminal' } }
+    ])
+    beginHandoff({ item: { id: 456, typeKey: 'issue' }, name: '另一个账号的工作项', description: '', expectedUserKey: 'next-user', origin: 'detail' }, context)
+    await view.settled()
+    assert.equal(view.find({ text: '打开 Agent 终端' }), null)
     assert.deepEqual(view.errors, [])
     assert.deepEqual(view.refusals, [])
   } finally {

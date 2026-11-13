@@ -91,7 +91,7 @@ The companion manifest contribution `location: "settings"` places the connection
 
 The handoff view lists existing Agent terminals and offers an explicit new-session choice. Its new Agent selector comes from `agents.available` on the verified workspace host; the plugin does not accept arbitrary shell commands. Missing or removed choices cannot launch. A command without an existing Agent directs the user to this selector.
 
-Existing terminals receive a sanitized single-line draft with `enter: false`, since an Agent may exit to its shell after inspection. New sessions use native `agent.launch` with an explicit catalog ID. Host acceptance of a launch is not proof that the Agent received or completed the task; terminal evidence is separate.
+Existing terminals receive a sanitized single-line draft with `enter: false`, since an Agent may exit to its shell after inspection. New sessions use native `agent.launch` with an explicit catalog ID. Host acceptance of a launch is not proof that the Agent received or completed the task; terminal evidence is separate. The plugin retains the actual terminal handle and offers a user-triggered open action. That action checks the selected workspace and exact terminal membership before calling terminal.focus, without sending the prompt again.
 
 Work-item descriptions are external material and are quoted as such in the prompt. They do not authorize additional account, repository or external-service actions.
 
@@ -102,7 +102,7 @@ Work-item descriptions are external material and are quoted as such in the promp
 | Credentials and OAuth tokens | Orca encrypted secrets |
 | Selected account/space and workspace links | Plugin private storage |
 | Workspace creation plan and receipt | Durable plugin journal |
-| Item drafts and unverified edit/node locks | Current frame session |
+| Item drafts, Agent terminal receipts and unverified edit/node locks | Current frame session |
 | List caches, pending authorization and request generations | Worker or frame lifetime, depending on ownership |
 
 Tests fake host and HTTP boundaries and use synthetic business data. They check payloads, scope changes, stale results, uncertainty and int64 identity. Fixture screenshots check native rendering separately. Installed-host RPC evidence, prior isolated Agent delivery and screenshots must not be presented as a completed full GUI flow. Current evidence and remaining gaps are recorded in the [README](../README.md#验证范围).

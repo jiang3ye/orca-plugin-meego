@@ -72,6 +72,17 @@ export function registerWorkspaceActions(orca: OrcaWorkerApi, connection: MeegoC
     return orca.host.call('workspace.open', { workspaceId })
   })
 
+  orca.panels.handle('meego.openAgentTerminal', async ({ workspaceId, terminalId }) => {
+    await requireListedWorkspace(orca, workspaceId)
+    const listing = await orca.host.call('terminal.list', { workspaceId })
+    if (listing.truncated) throw new RequestError('unavailable', 'Orca 返回的终端列表不完整，请刷新后再打开 Agent。')
+    if (listing.terminals.filter((terminal) => terminal.id === terminalId).length !== 1) {
+      throw new RequestError('agent_unavailable', '所选 Agent 终端已不可用，请刷新后重试。')
+    }
+    await requireListedWorkspace(orca, workspaceId)
+    return orca.host.call('terminal.focus', { terminalId })
+  })
+
   orca.panels.handle('meego.workspaceContext', async (input): Promise<WorkspaceContextInfo> => {
     const inventory = await readWorkspaceInventory(orca)
     const selected = input ? workspaceFromInventory(inventory, input.workspaceId) : undefined

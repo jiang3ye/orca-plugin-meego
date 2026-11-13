@@ -91,6 +91,68 @@ test('unknown, duplicate and truncated target identities cannot associate, open 
   }
 })
 
+test('opens a validated Agent terminal without launching or sending the prompt again', async () => {
+  const host = hostWith({
+    'terminal.list': { terminals: [{ id: 'received-terminal' }], truncated: false },
+    'terminal.focus': { focused: true }
+  })
+  const worker = await mountWorker(workspaceWorker, { host })
+  try {
+    assert.deepEqual(await worker.request('meego.openAgentTerminal', { workspaceId: TARGET, terminalId: 'received-terminal' }), { focused: true })
+    host.respond('terminal.focus', { focused: false })
+    assert.deepEqual(await worker.request('meego.openAgentTerminal', { workspaceId: TARGET, terminalId: 'received-terminal' }), { focused: false })
+    assert.deepEqual(host.callsOf('terminal.list'), [{ workspaceId: 'identity:remote-b' }, { workspaceId: 'identity:remote-b' }])
+    assert.deepEqual(host.callsOf('terminal.focus'), [{ terminalId: 'received-terminal' }, { terminalId: 'received-terminal' }])
+    assert.deepEqual(host.callsOf('workspace.open'), [])
+    assert.deepEqual(host.callsOf('agent.launch'), [])
+    assert.deepEqual(host.callsOf('terminal.sendText'), [])
+  } finally { await worker.deactivate() }
+})
+
+test('unknown, cross-workspace, duplicate or truncated terminal targets cannot be focused', async () => {
+  const targets = [
+    { terminalId: 'missing-terminal', terminals: [], truncated: false },
+    { terminalId: 'local-workspace-terminal', terminals: [{ id: 'received-terminal' }], truncated: false },
+    { terminalId: 'received-terminal', terminals: [{ id: 'received-terminal' }, { id: 'received-terminal' }], truncated: false },
+    { terminalId: 'received-terminal', terminals: [{ id: 'received-terminal' }], truncated: true }
+  ]
+  for (const { terminalId, terminals, truncated } of targets) {
+    const host = hostWith({ 'terminal.list': { terminals, truncated } })
+    const worker = await mountWorker(workspaceWorker, { host })
+    try {
+      await assert.rejects(() => worker.request('meego.openAgentTerminal', { workspaceId: TARGET, terminalId }), /终端列表不完整|所选 Agent 终端已不可用/)
+      assert.deepEqual(host.callsOf('terminal.focus'), [])
+      assert.deepEqual(host.callsOf('agent.launch'), [])
+      assert.deepEqual(host.callsOf('terminal.sendText'), [])
+    } finally { await worker.deactivate() }
+  }
+})
+
+test('an unavailable workspace cannot be opened through a stale Agent terminal receipt', async () => {
+  for (const listing of [
+    { workspaces: ROWS.slice(0, 1), truncated: false },
+    { workspaces: [ROWS[1], ROWS[1]], truncated: false },
+    { workspaces: ROWS, truncated: true }
+  ]) {
+    const host = hostWith({ 'workspace.list': listing })
+    const worker = await mountWorker(workspaceWorker, { host })
+    try {
+      await assert.rejects(() => worker.request('meego.openAgentTerminal', { workspaceId: TARGET, terminalId: 'received-terminal' }), /列表不完整|已不可用或标识不唯一/)
+      assert.deepEqual(host.callsOf('terminal.list'), [])
+      assert.deepEqual(host.callsOf('terminal.focus'), [])
+    } finally { await worker.deactivate() }
+  }
+  const host = hostWith({ 'terminal.list': () => {
+    host.respond('workspace.list', { workspaces: [], truncated: false })
+    return { terminals: [{ id: 'received-terminal' }], truncated: false }
+  } })
+  const worker = await mountWorker(workspaceWorker, { host })
+  try {
+    await assert.rejects(() => worker.request('meego.openAgentTerminal', { workspaceId: TARGET, terminalId: 'received-terminal' }), /已不可用或标识不唯一/)
+    assert.deepEqual(host.callsOf('terminal.focus'), [])
+  } finally { await worker.deactivate() }
+})
+
 test('a removed target or installed Agent cannot launch after the item was read', async () => {
   for (const change of ['workspace', 'agent']) {
     const host = hostWith()

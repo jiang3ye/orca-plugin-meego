@@ -143,7 +143,8 @@ test('hands off to an idle completed CLI terminal as a draft in its current work
     orca.panels.handle('test.deliver', () => deliverToAgent(orca, 'workspace-a', DETAIL, 'claude', { terminalId: 'claude-terminal' }))
   } }, { host })
   try {
-    await worker.request('test.deliver')
+    const delivered = await worker.request('test.deliver') as { terminal?: { workspaceId: string; terminalId: string } }
+    assert.deepEqual(delivered.terminal, { workspaceId: 'workspace-a', terminalId: 'claude-terminal' })
     const sends = host.callsOf('terminal.sendText') as { terminalId: string; text: string; enter: boolean }[]
     assert.equal(sends.length, 1)
     assert.equal(sends[0].terminalId, 'claude-terminal')
@@ -196,7 +197,8 @@ test('fits draft and launch prompts inside Orca limits and strips raw draft cont
     orca.panels.handle('test.deliver', () => deliverToAgent(orca, 'workspace-a', DETAIL, 'codex', { terminalId: null }))
   } }, { host: launchHost })
   try {
-    await launchWorker.request('test.deliver')
+    const delivered = await launchWorker.request('test.deliver') as { terminal?: { workspaceId: string; terminalId: string } }
+    assert.deepEqual(delivered.terminal, { workspaceId: 'workspace-a', terminalId: 'new-agent-terminal' })
     const launch = launchHost.callsOf('agent.launch')[0] as { workspaceId: string; prompt: string }
     assert.equal(launch.workspaceId, 'workspace-a')
     assert.ok(launch.prompt.length <= 4096)

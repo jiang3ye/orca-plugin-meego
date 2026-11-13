@@ -86,7 +86,7 @@ export async function deliverToAgent(
     }
     const result = target.guard ? await target.guard.run(send) : await send()
     if (!result.accepted) throw new RequestError('agent_unavailable', '无法确认草稿是否写入，请先检查目标终端再重试。')
-    return { sent: true, detail: `Orca 已接收写入 ${agent.title ?? agent.agent ?? 'Agent'} 终端的请求。请在终端核对后提交。` }
+    return { sent: true, detail: `Orca 已接收写入 ${agent.title ?? agent.agent ?? 'Agent'} 终端的请求。请在终端核对后提交。`, terminal: { workspaceId, terminalId } }
   }
   const { agents: available } = await orca.host.call('agents.available', { workspaceId })
   if (!available.some((entry) => entry.id === launchAgent)) throw new RequestError('agent_unavailable', '所选 Agent 已不可用，请刷新选项后重新选择。')
@@ -97,7 +97,6 @@ export async function deliverToAgent(
     if (signal?.aborted) throw new RequestError('cancelled', '交接请求已取消。')
     return orca.host.call('agent.launch', { workspaceId, agent: launchAgent, prompt: limitAgentHandoffText(prompt) }, options)
   }
-  if (target.guard) await target.guard.run(launch)
-  else await launch()
-  return { sent: true, detail: `Orca 已打开 ${launchAgent} 终端并接收投递请求。请在终端确认 Agent 启动和工作项送达。` }
+  const { terminalId } = target.guard ? await target.guard.run(launch) : await launch()
+  return { sent: true, detail: `Orca 已创建 ${launchAgent} 终端并接收投递请求。请打开终端确认 Agent 启动和工作项送达。`, terminal: { workspaceId, terminalId } }
 }

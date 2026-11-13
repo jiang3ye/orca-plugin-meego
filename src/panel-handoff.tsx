@@ -14,6 +14,7 @@ interface HandoffTarget {
 }
 
 type Handoff = HandoffTarget & { workspaceId: string }
+type HandoffReceipt = { handoff: Handoff; terminalId: string; newSession: boolean }
 
 type Report = (text: string, tone: Tone) => void
 
@@ -25,18 +26,21 @@ const lastAgentAtom = atom('')
 const choicesLoadingAtom = atom(false)
 const choicesErrorAtom = atom<string | null>(null)
 const sendBusyAtom = atom(false)
+const openingAtom = atom(false)
+const receiptAtom = atom<HandoffReceipt | null>(null)
 let choicesRequest = 0
 const HANDOFF_TIMEOUT_MS = 90_000
 const NEW_AGENT = 'meego:new-agent'
 
 export function handoffBusy(): boolean {
-  return read(sendBusyAtom)
+  return read(sendBusyAtom) || read(openingAtom)
 }
 
 export function cancelHandoff(origin?: Handoff['origin']): void {
-  if (origin && read(handoffAtom)?.origin !== origin) return
+  if (origin && (read(handoffAtom)?.origin ?? read(receiptAtom)?.handoff.origin) !== origin) return
   choicesRequest += 1
   set(handoffAtom, null)
+  set(receiptAtom, null)
   set(choicesAtom, null)
   set(agentAtom, '')
   set(choicesLoadingAtom, false)
@@ -89,6 +93,16 @@ export function HandoffView({ origin, context, report, onError, disabled = false
   defaultAgent?: string
   disabled?: boolean
 }) {
+  const receipt = read(receiptAtom)
+  if (receipt?.handoff.origin === origin && receipt.handoff.workspaceId === context?.workspaceId) {
+    return <Box padding="sm" border radius="md" gap="xs">
+      <Text size="sm">{receipt.newSession ? 'Agent 终端已在后台创建。打开终端可核对任务是否送达。' : '草稿写入请求已接收。打开终端核对后提交。'}</Text>
+      <Text size="xs" muted>{context.displayName ?? '所选工作区'}</Text>
+      <Row gap="xs" wrap><Button size="sm" variant="solid" tone="accent" disabled={disabled || handoffBusy() || connectionChanging()}
+        onPress={() => openReceipt(receipt, report, onError)}>{read(openingAtom) ? '正在打开 Agent 终端…' : '打开 Agent 终端'}</Button>
+      <Button size="sm" variant="ghost" disabled={handoffBusy()} onPress={() => cancelHandoff(origin)}>收起交接结果</Button></Row>
+    </Box>
+  }
   const handoff = read(handoffAtom)
   if (handoff?.origin !== origin || handoff.workspaceId !== context?.workspaceId) return null
   const agents = terminalAgents(context)
@@ -159,6 +173,19 @@ export function HandoffView({ origin, context, report, onError, disabled = false
   )
 }
 
+async function openReceipt(receipt: HandoffReceipt, report: Report, onError: (error: unknown) => Promise<void>): Promise<void> {
+  if (receipt !== read(receiptAtom) || handoffBusy() || connectionChanging()) return
+  set(openingAtom, true)
+  try {
+    const result = await plugin.request('meego.openAgentTerminal', { workspaceId: receipt.handoff.workspaceId, terminalId: receipt.terminalId })
+    if (receipt !== read(receiptAtom)) return
+    report(result.focused ? '已打开 Agent 终端，请在终端核对任务。' : 'Orca 尚未切换到目标终端，请检查工作区后重试打开。', result.focused ? 'success' : 'warning')
+  } catch (error) {
+    if (receipt === read(receiptAtom)) report(error instanceof Error ? error.message : String(error), 'danger')
+    await onError(error)
+  } finally { set(openingAtom, false) }
+}
+
 async function sendHandoff(handoff: Handoff, terminalId: string | null, report: Report, onError: (error: unknown) => Promise<void>, agent?: string): Promise<void> {
   if (handoffBusy() || connectionChanging() || handoff !== read(handoffAtom)) return
   if (terminalId === null && (read(choicesLoadingAtom) || read(choicesErrorAtom) !== null || !read(choicesAtom)?.some((entry) => entry.id === agent))) return
@@ -175,7 +202,12 @@ async function sendHandoff(handoff: Handoff, terminalId: string | null, report: 
     }, { timeoutMs: HANDOFF_TIMEOUT_MS })
     if (handoff === read(handoffAtom)) {
       report(result.detail, result.sent ? 'success' : 'danger')
-      if (result.sent) cancelHandoff()
+      if (result.sent) {
+        cancelHandoff()
+        if (result.terminal?.workspaceId === handoff.workspaceId && result.terminal.terminalId) {
+          set(receiptAtom, { handoff, terminalId: result.terminal.terminalId, newSession: terminalId === null })
+        }
+      }
     }
   } catch (error) {
     if (handoff === read(handoffAtom)) {
